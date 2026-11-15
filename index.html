@@ -6,6 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="似てる探し">
+<meta name="theme-color" content="#d6336c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Similar Artist Finder</title>
 <style>
   :root {
@@ -154,7 +158,7 @@
       <button id="nowBtn" title="Last.fm から今聴いている曲を読み取ります">▶ 今聴いている曲から</button>
     </div>
     <div class="row" style="margin-top:8px">
-      <label class="check"><input type="checkbox" id="autoFollow"> 曲が変わったら自動で更新（30秒ごとに確認）</label>
+      <label class="check"><input type="checkbox" id="autoFollow"> 曲が変わったら自動で更新（15秒ごとに確認）</label>
     </div>
     <div id="nowplaying"></div>
   </div>
@@ -287,10 +291,23 @@
   $('searchBtn').onclick = () => { const v = $('q').value.trim(); if (v) explore(v, true); };
   $('q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) $('searchBtn').click(); });
   $('nowBtn').onclick = () => checkNowPlaying(true);
-  $('autoFollow').onchange = e => {
+  // 再生中の曲の自動追従：15秒ごと＋画面に戻ったときに確認。チェック状態は端末ごとに記憶
+  const POLL_MS = 15000;
+  function startFollow() {
     clearInterval(pollTimer);
-    if (e.target.checked) { checkNowPlaying(false); pollTimer = setInterval(() => checkNowPlaying(false), 30000); }
+    checkNowPlaying(false);
+    pollTimer = setInterval(() => { if (document.visibilityState === 'visible') checkNowPlaying(false); }, POLL_MS);
+  }
+  $('autoFollow').onchange = e => {
+    try { localStorage.setItem('artistFinder.auto_follow', e.target.checked ? '1' : '0'); } catch {}
+    if (e.target.checked) startFollow(); else clearInterval(pollTimer);
   };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && $('autoFollow').checked) checkNowPlaying(false);
+  });
+  let autoFollowSaved = '0';
+  try { autoFollowSaved = localStorage.getItem('artistFinder.auto_follow') || '0'; } catch {}
+  if (autoFollowSaved === '1' && store.get('lfm_user')) { $('autoFollow').checked = true; startFollow(); }
   $('recBtn').onclick = recommendFromFavs;
   $('excludeKnown').checked = store.get('exclude_known') === '1';
   $('excludeKnown').onchange = e => { store.set('exclude_known', e.target.checked ? '1' : '0'); schedulePush(); };
@@ -438,6 +455,11 @@
     } finally {
       pushing = false;
     }
+  }
+
+  // アプリとしてインストールできるようにする（http(s) で開いたときだけ）
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pull(); });
