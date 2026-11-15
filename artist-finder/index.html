@@ -1221,16 +1221,23 @@
       '<h2>' + esc(name) + '</h2>' +
       (listeners ? '<div class="meta">Last.fm リスナー ' + listeners + ' 人</div>' : '') +
       (tags.length ? '<div class="tags">' + tagButtons(tags) + '</div>' : '') +
-      (bio ? '<p class="bio">' + esc(bio) + '</p>' : '');
+      (bio ? '<p class="bio">' + esc(bio) + '</p>' : '') +
+      '<div class="links" style="margin-top:8px">' +
+        '<a href="' + ytmUrl(name) + '" target="_blank" rel="noopener">▶ YouTube Music</a>' +
+        '<a class="apple" href="' + appleSearchUrl(name) + '" target="_blank" rel="noopener">♪ Apple Music</a>' +
+      '</div>';
+    body.style.minWidth = '0';
     body.querySelector('h2').appendChild(starButton(name));
     wireTags(body);
     p.appendChild(body);
     wrap.appendChild(p);
     itunesLookup(name).then(r => {
-      if (r && r.art) {
+      if (!r) return;
+      if (r.art) {
         const img = new Image(); img.src = r.art; img.alt = name;
         imgSlot.replaceWith(img);
       }
+      if (r.appleUrl) body.querySelector('.apple').href = r.appleUrl;
     });
   }
 
