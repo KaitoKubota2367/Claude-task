@@ -862,13 +862,37 @@
     }
     return trackTagCache.get(k);
   }
+  // ジャンル・国・年代などの大まかなタグ（多くの曲に付くので、雰囲気の比較では軽く扱う）
+  const GENERIC_TAGS = new Set(['rock', 'pop', 'j-pop', 'jpop', 'j pop', 'j-rock', 'jrock', 'japanese', 'japan', 'japanese rock',
+    'japanese pop', 'indie', 'alternative', 'alternative rock', 'electronic', 'electronica', 'hip-hop', 'hip hop', 'hiphop', 'rap',
+    'dance', 'anime', 'anison', 'soundtrack', 'ost', 'singer-songwriter', 'british', 'american', 'uk', 'usa', 'korean', 'k-pop',
+    'kpop', 'pop rock', 'indie rock', 'indie pop', 'vocaloid', 'idol', 'rnb', 'r&b', 'soul', 'jazz', 'classical', 'metal',
+    'punk', 'folk', 'country', 'edm', 'house', 'techno', 'female', 'male', 'band', 'j-indie', 'visual kei', 'instrumental']);
+  // 雰囲気を表すタグ（重く扱う）
+  const MOOD_TAGS = new Set(['chill', 'chillout', 'chill out', 'mellow', 'melancholic', 'melancholy', 'sad', 'happy', 'upbeat',
+    'energetic', 'dreamy', 'atmospheric', 'calm', 'relaxing', 'relax', 'emotional', 'romantic', 'dark', 'epic', 'uplifting',
+    'groovy', 'funky', 'ambient', 'lo-fi', 'lofi', 'nostalgic', 'nostalgia', 'summer', 'night', 'rainy', 'ethereal', 'aggressive',
+    'heavy', 'soft', 'acoustic', 'sentimental', 'bittersweet', 'euphoric', 'catchy', 'ballad', 'city pop', 'shoegaze',
+    'dream pop', 'post-rock', 'math rock', 'bedroom pop', 'jazzy', 'smooth', 'sexy', 'angry', 'lonely', 'hopeful', 'peaceful',
+    'warm', 'cold', 'cute', 'quirky', 'intense', 'driving', 'haunting', 'gentle', 'soothing', 'party', 'cinematic', 'lush',
+    'minimal', 'introspective', 'longing', 'love', 'night drive', 'late night', 'sunny', 'winter', 'spring', 'autumn',
+    'emo', 'piano', 'synthpop', 'synth-pop', 'neo-soul', 'funk', 'disco', 'vaporwave', 'future funk', 'trip-hop',
+    '切ない', '爽やか', 'エモい', '癒し', 'かっこいい', 'おしゃれ', '夏', '夜', '冬', '泣ける', '元気', '明るい', '暗い', 'しっとり']);
+  const DECADE_RE = /^(\d0s|\d{4}s?|'\d0s)$/;
+  function tagFactor(k) {
+    if (MOOD_TAGS.has(k)) return 2;
+    if (GENERIC_TAGS.has(k) || DECADE_RE.test(k)) return 0.25;
+    return 1;   // サブジャンルなど、ある程度具体的なタグ
+  }
+  const isGeneric = k => GENERIC_TAGS.has(k) || DECADE_RE.test(k);
+
   // タグ一覧 → { タグ: {name, w(重み)} }
   function tagVector(tags, artistName) {
     const v = new Map();
-    (tags || []).slice(0, 15).forEach(t => {
+    (tags || []).slice(0, 20).forEach(t => {
       const k = key(t.name || '');
       if (!k || TAG_IGNORE.has(k) || k === key(artistName || '')) return;
-      v.set(k, { name: t.name, w: Math.max(Number(t.count) || 0, 1) });
+      v.set(k, { name: t.name, w: Math.max(Number(t.count) || 0, 1) * tagFactor(k) });
     });
     return v;
   }
@@ -902,10 +926,28 @@
       if (token !== searchToken) return;
       renderTrackSeed(seedArtist, track, seed);
 
-      // 候補を集める：よく一緒に聴かれている曲。なければ雰囲気タグの人気曲から
-      let cands = asArray(sim && sim.track).map(t => ({
-        name: t.name, artist: (t.artist && t.artist.name) || '', match: Number(t.match) || 0
-      }));
+      // 候補を集める：
+      //  ① よく一緒に聴かれている曲（track.getsimilar）
+      //  ② 似ているアーティスト10組の代表曲（その曲の「周辺」の音楽に絞るため）
+      setStatus('候補の曲を集めています…');
+      const pool = new Map();
+      const addCand = (name, a, match) => {
+        if (!name || !a) return;
+        const k = key(a) + '|' + key(name);
+        const c = pool.get(k);
+        if (c) c.match = Math.max(c.match, match);
+        else pool.set(k, { name, artist: a, match });
+      };
+      asArray(sim && sim.track).slice(0, 40).forEach(t => addCand(t.name, (t.artist && t.artist.name) || '', Number(t.match) || 0));
+      const simArtists = await getSimilar(seedArtist, 10).then(s => asArray(s.artist)).catch(() => []);
+      if (token !== searchToken) return;
+      const tops = await mapLimited(simArtists, 4, a =>
+        lastfm({ method: 'artist.gettoptracks', artist: a.name, autocorrect: '1', limit: '5' })
+          .then(d => ({ a, list: asArray(d.toptracks && d.toptracks.track) })).catch(() => ({ a, list: [] })));
+      if (token !== searchToken) return;
+      // 代表曲は「よく一緒に聴かれている曲」より確度が低いので、アーティストの類似度×0.6 を基準値にする
+      tops.forEach(({ a, list }) => list.forEach(t => addCand(t.name, a.name, (Number(a.match) || 0) * 0.6)));
+      let cands = [...pool.values()];
       let source = 'similar';
       if (!cands.length) {
         source = 'tags';
@@ -930,14 +972,19 @@
         cands = [...m.values()];
       }
 
-      // 元の曲を除き、同じアーティストは2曲まで、上位24曲に絞る
+      // 元の曲を除き、元のアーティストは1曲・他は2曲まで、上位32曲に絞る
       const seedKey = key(seedArtist) + '|' + key(track);
       const perArtist = new Map();
       cands = cands
         .filter(c => c.artist && key(c.artist) + '|' + key(c.name) !== seedKey)
         .sort((a, b) => b.match - a.match)
-        .filter(c => { const k = key(c.artist); const n = (perArtist.get(k) || 0) + 1; perArtist.set(k, n); return n <= 2; })
-        .slice(0, 24);
+        .filter(c => {
+          const k = key(c.artist);
+          const n = (perArtist.get(k) || 0) + 1;
+          perArtist.set(k, n);
+          return n <= (k === key(seedArtist) ? 1 : 2);
+        })
+        .slice(0, 32);
       if (!cands.length) { setStatus('おすすめの曲が見つかりませんでした。', true); return; }
 
       // 各候補の雰囲気タグを取得して、元の曲との近さを計算
@@ -953,11 +1000,16 @@
       });
       if (token !== searchToken) return;
 
-      cands.forEach(c => { c.score = source === 'similar' ? 0.5 * c.match + 0.5 * c.mood : 0.3 * c.match + 0.7 * c.mood; });
+      // 雰囲気の近さを重視（75%）。ジャンル以外のタグが1つも一致しない曲は下げる
+      cands.forEach(c => {
+        const specificShared = [...c.vec.keys()].some(k => seed.vec.has(k) && !isGeneric(k));
+        c.score = 0.25 * c.match + 0.75 * c.mood;
+        if (!specificShared) c.score *= 0.5;
+      });
       cands.sort((a, b) => b.score - a.score);
       const max = Math.max(...cands.map(c => c.score)) || 1;
       setStatus(cands.length + '曲見つかりました。' +
-        (source === 'similar' ? 'よく一緒に聴かれていて、雰囲気タグが近い順です。' : '雰囲気タグが近い順です。') +
+        (source === 'similar' ? '周辺のアーティストの曲の中から、雰囲気タグが近い順に並べています。' : '雰囲気タグが近い順です。') +
         '曲名を押すと、その曲からさらに探せます。');
       cands.forEach(c => {
         const shared = [...c.vec.entries()]
