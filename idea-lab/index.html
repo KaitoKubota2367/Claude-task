@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>アイデア工房</title>
+<meta name="description" content="アイデアをゼロから出す・まとめる・みがくためのノート。Claudeへの相談文も作れます。">
+<meta name="theme-color" content="#e8590c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #f6f5f2; --surface: #ffffff; --surface2: #f0eee9; --text: #1d1c1a; --muted: #6b6862;
+    --border: #dedbd4; --accent: #e8590c; --accent-soft: #fff0e6; --on-accent: #ffffff;
+    --star: #f59f00; --danger: #c92a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --surface: #1e1e1c; --surface2: #282825; --text: #f0eee9; --muted: #a09d96;
+      --border: #34332f; --accent: #ff8a3d; --accent-soft: #3a2415; --on-accent: #1a1007;
+      --star: #fcc419; --danger: #ff6b6b; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  }
+  header { max-width: 720px; margin: 0 auto; padding: 20px 16px 4px; }
+  header h1 { font-size: 1.3rem; margin: 0; }
+  header p { margin: 0; color: var(--muted); font-size: .85rem; }
+  main { max-width: 720px; margin: 0 auto; padding: 8px 16px calc(96px + env(safe-area-inset-bottom)); }
+  section.tab { display: none; }
+  section.tab.on { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin: 12px 0; }
+  .card h2 { font-size: 1rem; margin: 0 0 4px; }
+  .card .hint { color: var(--muted); font-size: .85rem; margin: 0 0 12px; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button {
+    border: 1px solid var(--border); background: var(--surface2); border-radius: 10px; padding: 9px 14px;
+    cursor: pointer; min-height: 42px;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  button.ghost { background: transparent; }
+  button.danger { color: var(--danger); background: transparent; }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=text], textarea, select {
+    width: 100%; border: 1px solid var(--border); background: var(--bg); border-radius: 10px; padding: 10px 12px;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  label.f { display: block; font-size: .85rem; color: var(--muted); margin: 12px 0 4px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row > .grow { flex: 1; min-width: 0; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* お題ガチャ */
+  .slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .slot {
+    background: var(--bg); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 6px; text-align: center;
+    min-height: 82px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  }
+  .slot small { color: var(--muted); font-size: .72rem; }
+  .slot b { font-size: 1rem; word-break: keep-all; overflow-wrap: anywhere; }
+  .slot.locked { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+  .slot.spin b { animation: pop .25s ease; }
+  @keyframes pop { from { transform: scale(.7); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+  .combo { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--accent-soft); font-weight: 600; text-align: center; }
+
+  .qcard { font-size: 1.05rem; font-weight: 600; padding: 14px; border-radius: 10px; background: var(--surface2); margin-bottom: 10px; }
+
+  /* 一覧 */
+  .toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .idea {
+    display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 14px; margin: 10px 0; min-height: 0;
+  }
+  .idea b { display: block; font-size: 1rem; }
+  .idea .meta { color: var(--muted); font-size: .8rem; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+  .badge { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 99px; background: var(--surface2); color: var(--muted); }
+  .badge.doing { background: var(--accent-soft); color: var(--accent); }
+  .stars { color: var(--star); letter-spacing: 1px; }
+  .empty { color: var(--muted); text-align: center; padding: 32px 8px; }
+
+  .rate { display: flex; gap: 4px; }
+  .rate button { min-width: 44px; padding: 6px; font-size: 1.2rem; background: transparent; color: var(--border); }
+  .rate button.on { color: var(--star); }
+
+  /* みがく */
+  .persp { border-top: 1px solid var(--border); padding: 12px 0 4px; }
+  .persp:first-of-type { border-top: 0; }
+  .persp b { display: block; }
+  .persp p { margin: 0 0 6px; color: var(--muted); font-size: .85rem; }
+
+  /* 下のタブ */
+  nav.tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); z-index: 5;
+  }
+  nav.tabs .in { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; max-width: 720px; }
+  nav.tabs button {
+    border: 0; border-radius: 0; background: transparent; padding: 8px 4px 10px; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 0; font-size: .78rem; min-height: 60px;
+  }
+  nav.tabs button span { font-size: 1.35rem; line-height: 1.3; }
+  nav.tabs button.on { color: var(--accent); font-weight: 600; }
+
+  /* シート */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; z-index: 10; }
+  .sheet-bg.on { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow-y: auto; z-index: 11;
+    background: var(--surface); border-radius: 18px 18px 0 0; padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .2s ease; max-width: 720px; margin: 0 auto;
+  }
+  .sheet.on { transform: none; }
+  .sheet .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sheet .top h2 { margin: 0; font-size: 1.05rem; }
+  .sheet textarea.prompt { min-height: 240px; font-size: .9rem; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 99px; font-size: .9rem;
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20;
+  }
+  .toast.on { opacity: 1; }
+  details summary { cursor: pointer; color: var(--muted); font-size: .9rem; padding: 4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💡 アイデア工房</h1>
+  <p>ひらめく → まとめる → みがく</p>
+</header>
+
+<main>
+  <!-- ひらめく -->
+  <section class="tab on" id="tab-spark">
+    <div class="card">
+      <h2>✏️ すぐメモ</h2>
+      <p class="hint">思いついたら、短くてもいいので書いておきましょう。</p>
+      <div class="row">
+        <input type="text" id="quick" class="grow" placeholder="例：ゲームのボス戦メモアプリ" enterkeyhint="done">
+        <button class="primary" id="quickAdd">追加</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🎰 お題ガチャ</h2>
+      <p class="hint">3つの言葉を組み合わせて、アイデアのタネを作ります。気に入った言葉はタップで固定できます。</p>
+      <div class="slots" id="slots"></div>
+      <div class="combo" id="combo"></div>
+      <div class="btns">
+        <button class="primary" id="spin">回す</button>
+        <button id="comboSave">このお題をメモ</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>❓ 質問カード</h2>
+      <p class="hint">質問に答えていくと、作りたいものが見えてきます。</p>
+      <div class="qcard" id="qtext"></div>
+      <textarea id="qanswer" placeholder="思いつくまま書いてみてください"></textarea>
+      <div class="btns">
+        <button class="primary" id="qSave">アイデアとしてメモ</button>
+        <button id="qNext">別の質問</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🤖 Claudeにアイデアを出してもらう</h2>
+      <p class="hint">テーマを書くと、Claudeに渡す相談文を作ります。空欄でもOKです。</p>
+      <input type="text" id="aiTheme" placeholder="例：ゲーム、音楽、毎日の生活">
+      <div class="btns"><button class="primary" id="aiSpark">相談文を作る</button></div>
+    </div>
+  </section>
+
+  <!-- まとめる -->
+  <section class="tab" id="tab-list">
+    <div class="card">
+      <h2>📒 アイデア一覧</h2>
+      <p class="hint">タップすると、くわしく書いたり評価したりできます。「おすすめ順」は、やりたい度とかんたん度の合計が高い順です。</p>
+      <div class="toolbar">
+        <select id="filter" aria-label="しぼりこみ">
+          <option value="active">進行中・アイデア</option>
+          <option value="all">すべて</option>
+          <option value="idea">アイデアのみ</option>
+          <option value="doing">作っている</option>
+          <option value="done">完成・終了</option>
+        </select>
+        <select id="sort" aria-label="並び順">
+          <option value="new">新しい順</option>
+          <option value="best">おすすめ順</option>
+          <option value="want">やりたい順</option>
+          <option value="easy">かんたん順</option>
+        </select>
+      </div>
+    </div>
+    <div id="list"></div>
+    <div class="card">
+      <h2>🤖 全部まとめてClaudeに相談</h2>
+      <p class="hint">一覧のアイデアを整理して、どれから作るとよいか聞く相談文を作ります。</p>
+      <button class="primary" id="aiAll">相談文を作る</button>
+    </div>
+    <div class="card">
+      <details>
+        <summary>バックアップ（機種変更などのとき）</summary>
+        <p class="hint">「コピー」した文字をメモ帳などに保存しておき、新しいスマホで「貼り付けて復元」すると元に戻せます。</p>
+        <div class="btns">
+          <button id="backup">データをコピー</button>
+          <button id="restore">貼り付けて復元</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- みがく -->
+  <section class="tab" id="tab-polish">
+    <div class="card">
+      <h2>🔍 何をみがく？</h2>
+      <p class="hint">メモしたアイデアか、今使っているアプリやものを選びます。</p>
+      <select id="target"></select>
+      <div id="freeWrap">
+        <label class="f" for="freeName">みがきたいもの</label>
+        <input type="text" id="freeName" placeholder="例：似てるアーティスト探しアプリ">
+        <label class="f" for="freeDesc">どんなものか（かんたんに）</label>
+        <textarea id="freeDesc" placeholder="例：好きなアーティストを入れると、似ているアーティストを教えてくれる"></textarea>
+      </div>
+    </div>
+    <div class="card">
+      <h2>🧭 いろいろな見方で考える</h2>
+      <p class="hint">全部答えなくて大丈夫です。気になったものだけ書いてください。書いた内容は自動で保存されます。</p>
+      <div id="persps"></div>
+      <div class="btns">
+        <button class="primary" id="aiPolish">Claudeに改善点を聞く</button>
+        <button class="ghost" id="clearPolish">書いた内容を消す</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="画面きりかえ">
+  <div class="in">
+    <button class="on" data-tab="spark"><span>💡</span>ひらめく</button>
+    <button data-tab="list"><span>📒</span>まとめる</button>
+    <button data-tab="polish"><span>💎</span>みがく</button>
+  </div>
+</nav>
+
+<!-- アイデア詳細 -->
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="detail" role="dialog" aria-modal="true" aria-labelledby="dTitleLabel">
+  <div class="top">
+    <h2 id="dTitleLabel">アイデアの詳細</h2>
+    <button class="ghost" data-close>閉じる</button>
+  </div>
+  <label class="f" for="dTitle">タイトル</label>
+  <input type="text" id="dTitle">
+  <label class="f" for="dNote">メモ</label>
+  <textarea id="dNote" placeholder="思いついたこと、なんでも"></textarea>
+  <div class="row" style="gap:16px; margin-top:8px">
+    <div><label class="f">やりたい度</label><div class="rate" data-rate="want"></div></div>
+    <div><label class="f">かんたん度</label><div class="rate" data-rate="easy"></div></div>
+  </div>
+  <label class="f" for="dStatus">状態</label>
+  <select id="dStatus">
+    <option value="idea">💭 アイデア</option>
+    <option value="doing">🔨 作っている</option>
+    <option value="done">✅ 完成・終了</option>
+  </select>
+  <details style="margin-top:14px" id="planBox">
+    <summary>📝 企画メモ（4つの質問）</summary>
+    <label class="f" for="pWho">① だれが使う？</label>
+    <input type="text" id="pWho" placeholder="例：自分。ゲームをよくする人">
+    <label class="f" for="pProblem">② 何に困っている？ 何がしたい？</label>
+    <textarea id="pProblem" placeholder="例：ボスの攻略をすぐ忘れる"></textarea>
+    <label class="f" for="pWhat">③ これで何ができるようになる？</label>
+    <textarea id="pWhat" placeholder="例：ボスごとに弱点や挑戦回数を記録できる"></textarea>
+    <label class="f" for="pFirst">④ 最初に作る「いちばん小さい版」は？</label>
+    <textarea id="pFirst" placeholder="例：ボスの名前とメモを書いて保存できるだけ"></textarea>
+  </details>
+  <div class="btns">
+    <button class="primary" id="dAi">Claudeに整理してもらう</button>
+    <button id="dPolish">💎 みがく</button>
+    <button class="danger" id="dDelete">削除</button>
+  </div>
+</div>
+
+<!-- 相談文 -->
+<div class="sheet" id="promptSheet" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <div class="top">
+    <h2 id="pTitle">Claudeへの相談文</h2>
+    <button class="ghost" data-close>閉じる</button>
+  </div>
+  <p class="hint" style="color:var(--muted);font-size:.85rem;margin:0 0 8px">
+    このまま使えます。書き足したいことがあれば直してから、「コピー」してClaudeに貼り付けてください。
+  </p>
+  <textarea class="prompt" id="promptText"></textarea>
+  <div class="btns">
+    <button class="primary" id="pCopy">コピー</button>
+    <button id="pOpen">コピーしてClaudeを開く</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const KEY = 'ideaLab.ideas';
+  const FREE_KEY = 'ideaLab.free';
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+
+  // ---------- 保存 ----------
+  function load(key, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; }
+  }
+  function store(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }
+  let ideas = load(KEY, []);
+  if (!Array.isArray(ideas)) ideas = [];
+  let free = load(FREE_KEY, { name: '', desc: '', improve: {} });
+  const save = () => store(KEY, ideas);
+  const saveFree = () => store(FREE_KEY, free);
+
+  function addIdea(title, note = '') {
+    title = title.trim();
+    if (!title) return null;
+    const idea = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      title, note, want: 0, easy: 0, status: 'idea', created: Date.now(),
+      plan: { who: '', problem: '', what: '', first: '' }, improve: {}
+    };
+    ideas.unshift(idea);
+    save(); renderList(); renderTargets();
+    return idea;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1800);
+  }
+
+  // ---------- タブ ----------
+  function showTab(name) {
+    $$('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+    $$('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
+    window.scrollTo(0, 0);
+  }
+  $$('nav.tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  // ---------- すぐメモ ----------
+  function quickAdd() {
+    const v = $('#quick').value;
+    if (addIdea(v)) { $('#quick').value = ''; toast('メモしました'); }
+  }
+  $('#quickAdd').addEventListener('click', quickAdd);
+  $('#quick').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) quickAdd(); });
+
+  // ---------- お題ガチャ ----------
+  const WORDS = [
+    { label: '好きなこと', list: ['ゲーム','音楽','料理','映画・アニメ','睡眠','散歩','推し活','写真','買い物','勉強','筋トレ','旅行','掃除','読書','ペット','天気','お金','友達','カフェ','ファッション','植物','スポーツ観戦'] },
+    { label: 'こまりごと', list: ['すぐ忘れる','決められない','続かない','時間が足りない','探すのが面倒','比べたい','記録したい','人と共有したい','すぐ飽きる','散らかる','待ち時間がひま','やる気が出ない','どれがいいか分からない','上達したい','ムダづかいしがち'] },
+    { label: '形', list: ['チェックリスト','タイマー','ガチャ','グラフ','クイズ','カレンダー','ランキング','日記','診断','ミニゲーム','図鑑','ルーレット','カウンター','ビンゴ','すごろく','メモ帳'] },
+  ];
+  const gacha = { values: WORDS.map(w => pick(w.list)), locked: [false, false, false] };
+  function renderSlots(spun) {
+    $('#slots').innerHTML = WORDS.map((w, i) => `
+      <button class="slot ${gacha.locked[i] ? 'locked' : ''} ${spun && !gacha.locked[i] ? 'spin' : ''}" data-i="${i}"
+        aria-pressed="${gacha.locked[i]}" aria-label="${esc(w.label)}：${esc(gacha.values[i])}（タップで固定）">
+        <small>${esc(w.label)}${gacha.locked[i] ? ' 🔒' : ''}</small><b>${esc(gacha.values[i])}</b>
+      </button>`).join('');
+    $('#combo').textContent = comboText();
+  }
+  const comboText = () => `「${gacha.values[0]}」で「${gacha.values[1]}」を助ける${gacha.values[2]}`;
+  $('#slots').addEventListener('click', e => {
+    const b = e.target.closest('.slot'); if (!b) return;
+    const i = +b.dataset.i; gacha.locked[i] = !gacha.locked[i]; renderSlots(false);
+  });
+  $('#spin').addEventListener('click', () => {
+    gacha.values = gacha.values.map((v, i) => {
+      if (gacha.locked[i]) return v;
+      let n; do { n = pick(WORDS[i].list); } while (n === v && WORDS[i].list.length > 1);
+      return n;
+    });
+    renderSlots(true);
+  });
+  $('#comboSave').addEventListener('click', () => {
+    addIdea(comboText(), 'お題ガチャから'); toast('お題をメモしました');
+  });
+  renderSlots(false);
+
+  // ---------- 質問カード ----------
+  const QUESTIONS = [
+    '最近「面倒だな」と思ったことは？',
+    '「こういうのがあればいいのに」と思ったことは？',
+    '毎日なんとなくやっていることは？',
+    'スクショやメモ帳で管理しているものは？',
+    'つい何度も検索していることは？',
+    '友達とよく話題になることは？',
+    '好きなゲームや作品の「ここが好き」は？',
+    '最近ハマっているものは？ それをもっと楽しむには？',
+    '人に聞かれて、毎回同じ説明をしていることは？',
+    '迷って決められなかったことは？',
+    '続けたいのに続かないことは？',
+    '小さいころ欲しかった道具は？',
+    '数えたり記録したりしたら面白そうなものは？',
+    '待ち時間やすきま時間にしたいことは？',
+    'もっと上手くなりたいことは？',
+    '忘れて困ったことは？',
+  ];
+  let qIndex = Math.floor(Math.random() * QUESTIONS.length);
+  function showQ() { $('#qtext').textContent = QUESTIONS[qIndex]; }
+  $('#qNext').addEventListener('click', () => {
+    let n; do { n = Math.floor(Math.random() * QUESTIONS.length); } while (n === qIndex);
+    qIndex = n; showQ();
+  });
+  $('#qSave').addEventListener('click', () => {
+    const a = $('#qanswer').value.trim();
+    if (!a) { toast('答えを書いてからメモしてください'); return; }
+    const first = a.split('\n')[0].slice(0, 40);
+    addIdea(first, `質問：${QUESTIONS[qIndex]}\n答え：${a}`);
+    $('#qanswer').value = ''; toast('メモしました');
+  });
+  showQ();
+
+  // ---------- 一覧 ----------
+  const STATUS = { idea: '💭 アイデア', doing: '🔨 作っている', done: '✅ 完成・終了' };
+  const starStr = n => n ? '★'.repeat(n) + '☆'.repeat(3 - n) : '−';
+  function renderList() {
+    const f = $('#filter').value, s = $('#sort').value;
+    let arr = ideas.filter(i => f === 'all' ? true : f === 'active' ? i.status !== 'done' : i.status === f);
+    const by = {
+      new: (a, b) => b.created - a.created,
+      best: (a, b) => (b.want + b.easy) - (a.want + a.easy) || b.created - a.created,
+      want: (a, b) => b.want - a.want || b.created - a.created,
+      easy: (a, b) => b.easy - a.easy || b.created - a.created,
+    }[s];
+    arr = arr.slice().sort(by);
+    if (!arr.length) {
+      $('#list').innerHTML = `<div class="empty">${ideas.length ? 'この条件のアイデアはありません' : 'まだアイデアがありません。<br>「💡ひらめく」でメモしてみましょう。'}</div>`;
+      return;
+    }
+    $('#list').innerHTML = arr.map(i => `
+      <button class="idea" data-id="${i.id}">
+        <b>${esc(i.title)}</b>
+        <div class="meta">
+          <span class="badge ${i.status}">${STATUS[i.status]}</span>
+          <span>やりたい <span class="stars">${starStr(i.want)}</span></span>
+          <span>かんたん <span class="stars">${starStr(i.easy)}</span></span>
+        </div>
+      </button>`).join('');
+  }
+  $('#filter').addEventListener('change', renderList);
+  $('#sort').addEventListener('change', renderList);
+  $('#list').addEventListener('click', e => {
+    const b = e.target.closest('.idea'); if (b) openDetail(b.dataset.id);
+  });
+
+  // ---------- シート共通 ----------
+  let openSheetEl = null;
+  function openSheet(el) {
+    if (openSheetEl && openSheetEl !== el) openSheetEl.classList.remove('on');
+    openSheetEl = el; el.classList.add('on'); $('#sheetBg').classList.add('on');
+    el.scrollTop = 0;
+  }
+  function closeSheet() {
+    if (openSheetEl) openSheetEl.classList.remove('on');
+    openSheetEl = null; $('#sheetBg').classList.remove('on');
+    current = null;
+  }
+  $('#sheetBg').addEventListener('click', closeSheet);
+  $$('[data-close]').forEach(b => b.addEventListener('click', closeSheet));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+  // ---------- 詳細 ----------
+  let current = null;
+  const PLAN = { pWho: 'who', pProblem: 'problem', pWhat: 'what', pFirst: 'first' };
+  function renderRates() {
+    $$('.rate').forEach(box => {
+      const k = box.dataset.rate, v = current ? current[k] : 0;
+      box.innerHTML = [1, 2, 3].map(n =>
+        `<button data-n="${n}" class="${n <= v ? 'on' : ''}" aria-label="${n}">${n <= v ? '★' : '☆'}</button>`).join('');
+    });
+  }
+  function openDetail(id) {
+    current = ideas.find(i => i.id === id); if (!current) return;
+    current.plan = current.plan || { who: '', problem: '', what: '', first: '' };
+    $('#dTitle').value = current.title;
+    $('#dNote').value = current.note || '';
+    $('#dStatus').value = current.status;
+    for (const [el, k] of Object.entries(PLAN)) $('#' + el).value = current.plan[k] || '';
+    $('#planBox').open = Object.values(current.plan).some(Boolean);
+    renderRates();
+    openSheet($('#detail'));
+  }
+  function touch() { save(); renderList(); renderTargets(); }
+  $('#dTitle').addEventListener('input', e => { if (current) { current.title = e.target.value || '（無題）'; touch(); } });
+  $('#dNote').addEventListener('input', e => { if (current) { current.note = e.target.value; save(); } });
+  $('#dStatus').addEventListener('change', e => { if (current) { current.status = e.target.value; touch(); } });
+  for (const [el, k] of Object.entries(PLAN)) {
+    $('#' + el).addEventListener('input', e => { if (current) { current.plan[k] = e.target.value; save(); } });
+  }
+  $$('.rate').forEach(box => box.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !current) return;
+    const k = box.dataset.rate, n = +b.dataset.n;
+    current[k] = current[k] === n ? 0 : n; renderRates(); touch();
+  }));
+  $('#dDelete').addEventListener('click', () => {
+    if (!current || !confirm(`「${current.title}」を削除しますか？`)) return;
+    ideas = ideas.filter(i => i !== current); closeSheet(); touch(); toast('削除しました');
+  });
+  $('#dPolish').addEventListener('click', () => {
+    if (!current) return;
+    const id = current.id; closeSheet();
+    $('#target').value = id; renderPolish(); showTab('polish');
+  });
+  $('#dAi').addEventListener('click', () => { if (current) showPrompt(promptOrganize(current)); });
+
+  // ---------- みがく ----------
+  const PERSPECTIVES = [
+    { k: 'user', t: '👤 使う人になりきる', d: '初めて使う人は、最初の画面で何をすればいいか分かる？ 迷いそうなところは？' },
+    { k: 'hassle', t: '😩 面倒なところ', d: '手間がかかる・何度もタップする・待たされる、と感じるところは？' },
+    { k: 'reduce', t: '➖ 減らす', d: 'なくても困らない機能やボタン、文字はある？ もっとシンプルにできる？' },
+    { k: 'add', t: '➕ 足す', d: 'あったら嬉しい機能は？ 「ついでにこれもできたら」と思うことは？' },
+    { k: 'combine', t: '🔗 組み合わせる', d: 'ほかのアプリや好きなもの（ゲーム・音楽など）と組み合わせると？' },
+    { k: 'reverse', t: '🔄 逆にする', d: '順番・立場・使う時間などを逆にしてみると、新しい使い方はある？' },
+    { k: 'daily', t: '📅 毎日使いたくなる', d: 'また開きたくなる仕かけは？（記録が増える、ごほうび、通知など）' },
+    { k: 'fun', t: '✨ ワクワク', d: '見た目や動きで、もっと楽しくできるところは？' },
+    { k: 'phone', t: '📱 スマホで使う', d: '片手で使える？ 文字やボタンは小さすぎない？ 電車の中でも使える？' },
+    { k: 'share', t: '👥 人と使う', d: '友達や家族と一緒に使えたら、どうなる？ 見せたくなる？' },
+  ];
+  function renderTargets() {
+    const sel = $('#target'), prev = sel.value;
+    sel.innerHTML = `<option value="__free">✍️ 自由に入力（今使っているアプリなど）</option>` +
+      ideas.map(i => `<option value="${i.id}">${esc(i.title)}</option>`).join('');
+    sel.value = [...sel.options].some(o => o.value === prev) ? prev : '__free';
+  }
+  function polishTarget() {
+    const v = $('#target').value;
+    if (v === '__free') return { free: true, name: free.name, desc: free.desc, improve: free.improve };
+    const i = ideas.find(x => x.id === v);
+    if (!i) return { free: true, name: free.name, desc: free.desc, improve: free.improve };
+    i.improve = i.improve || {};
+    return { free: false, idea: i, improve: i.improve };
+  }
+  function renderPolish() {
+    const t = polishTarget();
+    $('#freeWrap').style.display = t.free ? '' : 'none';
+    if (t.free) { $('#freeName').value = free.name || ''; $('#freeDesc').value = free.desc || ''; }
+    $('#persps').innerHTML = PERSPECTIVES.map(p => `
+      <div class="persp">
+        <b>${p.t}</b><p>${p.d}</p>
+        <textarea data-k="${p.k}" rows="2" aria-label="${esc(p.t)}">${esc(t.improve[p.k] || '')}</textarea>
+      </div>`).join('');
+  }
+  $('#target').addEventListener('change', renderPolish);
+  $('#freeName').addEventListener('input', e => { free.name = e.target.value; saveFree(); });
+  $('#freeDesc').addEventListener('input', e => { free.desc = e.target.value; saveFree(); });
+  $('#persps').addEventListener('input', e => {
+    const k = e.target.dataset.k; if (!k) return;
+    const t = polishTarget();
+    t.improve[k] = e.target.value;
+    t.free ? saveFree() : save();
+  });
+  $('#clearPolish').addEventListener('click', () => {
+    if (!confirm('「いろいろな見方」に書いた内容を消しますか？')) return;
+    const t = polishTarget();
+    for (const k of Object.keys(t.improve)) delete t.improve[k];
+    t.free ? saveFree() : save();
+    renderPolish();
+  });
+  $('#aiPolish').addEventListener('click', () => {
+    const t = polishTarget();
+    if (t.free && !free.name.trim()) { toast('みがきたいものの名前を書いてください'); $('#freeName').focus(); return; }
+    showPrompt(promptPolish(t));
+  });
+
+  // ---------- 相談文 ----------
+  const INTRO = '私はAIにもプログラミングにも詳しくありません。専門用語はできるだけ使わず、やさしい言葉で答えてください。';
+  function ideaBlock(i) {
+    const lines = [`■ ${i.title}`];
+    if (i.note) lines.push(`メモ：${i.note}`);
+    if (i.want || i.easy) lines.push(`やりたい度：${i.want}/3、かんたんそう度：${i.easy}/3`);
+    const p = i.plan || {};
+    if (p.who) lines.push(`だれが使う：${p.who}`);
+    if (p.problem) lines.push(`困っていること：${p.problem}`);
+    if (p.what) lines.push(`できるようになること：${p.what}`);
+    if (p.first) lines.push(`最初の小さい版：${p.first}`);
+    return lines.join('\n');
+  }
+  function promptSpark(theme) {
+    return [
+      INTRO, '',
+      'Claudeと一緒に「バイブコーディング」（言葉で頼んでアプリを作ること）で作れる、スマホで使える小さなアプリのアイデアを10個出してください。',
+      theme ? `テーマ：${theme}` : 'テーマは自由です。',
+      '',
+      '条件：',
+      '・1つのアプリにつき、名前・ひとことの説明・どんなときに便利か を書く',
+      '・かんたんに作れるものから、ちょっとがんばれば作れるものまで混ぜる',
+      '・最後に、初心者が最初に作るならどれがおすすめか、理由と一緒に教えて',
+    ].join('\n');
+  }
+  function promptOrganize(i) {
+    return [
+      INTRO, '',
+      'アプリのアイデアがあります。このアイデアを整理して、作るための計画を一緒に考えてください。',
+      '', ideaBlock(i), '',
+      'お願いしたいこと：',
+      '1. このアイデアの「いちばん大事なところ」をひとことで',
+      '2. 最初に作る、いちばん小さい版に入れる機能（3つまで）',
+      '3. あとから足すと良さそうな機能',
+      '4. 作る前に決めておいたほうがいいことがあれば、質問してください',
+    ].join('\n');
+  }
+  function promptAll() {
+    const list = ideas.filter(i => i.status !== 'done');
+    return [
+      INTRO, '',
+      '今までにメモしたアプリのアイデアの一覧です。',
+      '', ...list.map(ideaBlock).flatMap(b => [b, '']),
+      'お願いしたいこと：',
+      '1. 似ているアイデアをグループに分けて',
+      '2. 組み合わせると良くなりそうなものがあれば教えて',
+      '3. 最初に作るならどれがおすすめか、上位3つと理由を教えて',
+    ].join('\n');
+  }
+  function promptPolish(t) {
+    const notes = PERSPECTIVES.filter(p => (t.improve[p.k] || '').trim())
+      .map(p => `・${p.t.replace(/^\S+\s/, '')}：${t.improve[p.k].trim()}`);
+    const head = t.free
+      ? [`■ ${free.name.trim()}`, free.desc.trim() ? `どんなもの：${free.desc.trim()}` : ''].filter(Boolean).join('\n')
+      : ideaBlock(t.idea);
+    return [
+      INTRO, '',
+      '次のアプリ（アイデア）の改善点を一緒に探してください。',
+      '', head, '',
+      ...(notes.length ? ['自分で気づいたこと：', ...notes, ''] : []),
+      'お願いしたいこと：',
+      '1. 改善できそうなところを、効果が大きい順に5つまで',
+      '2. それぞれ、かんたんに直せるか、大がかりになるか',
+      '3. 使う人の立場で見て、気になるところがあれば教えて',
+      notes.length ? '4. 私が気づいたことについても、良い直し方を教えて' : '',
+    ].filter((l, idx, a) => l !== '' || a[idx - 1] !== '').join('\n').trim();
+  }
+  function showPrompt(text) {
+    $('#promptText').value = text;
+    openSheet($('#promptSheet'));
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch {
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch {}
+      ta.remove(); return ok;
+    }
+  }
+  $('#pCopy').addEventListener('click', async () => {
+    toast(await copyText($('#promptText').value) ? 'コピーしました' : 'コピーできませんでした');
+  });
+  $('#pOpen').addEventListener('click', async () => {
+    const ok = await copyText($('#promptText').value);
+    toast(ok ? 'コピーしました。Claudeに貼り付けてください' : 'コピーできませんでした');
+    window.open('https://claude.ai/new', '_blank', 'noopener');
+  });
+  $('#aiSpark').addEventListener('click', () => showPrompt(promptSpark($('#aiTheme').value.trim())));
+  $('#aiAll').addEventListener('click', () => {
+    if (!ideas.some(i => i.status !== 'done')) { toast('まだアイデアがありません'); return; }
+    showPrompt(promptAll());
+  });
+
+  // ---------- バックアップ ----------
+  $('#backup').addEventListener('click', async () => {
+    const data = JSON.stringify({ app: 'ideaLab', v: 1, ideas, free });
+    toast(await copyText(data) ? 'コピーしました。メモ帳などに保存してください' : 'コピーできませんでした');
+  });
+  $('#restore').addEventListener('click', () => {
+    const s = prompt('バックアップの文字を貼り付けてください（今のデータは置きかわります）');
+    if (!s) return;
+    try {
+      const d = JSON.parse(s);
+      if (d.app !== 'ideaLab' || !Array.isArray(d.ideas)) throw 0;
+      ideas = d.ideas; free = d.free || { name: '', desc: '', improve: {} };
+      save(); saveFree(); renderList(); renderTargets(); renderPolish(); toast('復元しました');
+    } catch { alert('読み込めませんでした。コピーした文字をそのまま貼り付けてください。'); }
+  });
+
+  renderList(); renderTargets(); renderPolish();
+
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
