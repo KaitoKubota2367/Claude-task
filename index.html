@@ -72,7 +72,14 @@
   }
   .tag:hover { text-decoration: underline; }
   .bio { font-size: .88rem; color: var(--muted); margin: 6px 0 0; }
-  .favlist { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+  .favlist { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; max-height: 40vh; overflow-y: auto; }
+  .fav-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .fav-head h3 { margin: 0; min-width: 0; }
+  .fav-head button { flex: none; }
+  .fav-preview {
+    font-size: .85rem; color: var(--muted); margin: 4px 0 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .chip {
     display: inline-flex; align-items: center; gap: 2px; font-size: .85rem;
     border: 1px solid var(--border); border-radius: 999px; background: var(--bg);
@@ -158,6 +165,12 @@
     <div class="help" style="margin-top:6px">
       <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Similar%20Artist%20Finder" target="_blank" rel="noopener">トークン作成ページ</a>で「gist」にだけチェックが入った状態のまま作成し、表示された文字列を貼り付けてください。2台目以降の端末では、ここにトークンを入れて保存するだけで、APIキー・ユーザー名・お気に入りが読み込まれます。
     </div>
+    <label class="small">好きなアーティストのバックアップ</label>
+    <div class="row">
+      <button class="small" id="exportBtn">書き出し</button>
+      <button class="small" id="importBtn">読み込み</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="saveBtn">保存</button>
       <span id="saveMsg" class="meta"></span>
@@ -182,16 +195,15 @@
   </div>
 
   <div class="panel">
-    <h3>★ 好きなアーティスト <span class="meta" id="favCount"></span><span class="sync" id="syncStatus"></span></h3>
-    <div class="favlist" id="favList"></div>
+    <div class="fav-head">
+      <h3>★ 好きなアーティスト <span class="meta" id="favCount"></span><span class="sync" id="syncStatus"></span></h3>
+      <button class="small" id="favToggle" aria-expanded="false" aria-controls="favList">一覧 ▼</button>
+    </div>
+    <div class="fav-preview" id="favPreview"></div>
+    <div class="favlist" id="favList" hidden></div>
     <div class="row">
       <button class="primary" id="recBtn">★ 好みからおすすめを探す</button>
-      <label class="check"><input type="checkbox" id="excludeKnown"> Last.fm でよく聴いているアーティストを除く</label>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <button class="small" id="exportBtn">書き出し（バックアップ）</button>
-      <button class="small" id="importBtn">読み込み</button>
-      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <label class="check" title="Last.fm の再生履歴でよく聴いているアーティストを結果から外します"><input type="checkbox" id="excludeKnown"> よく聴いているアーティストを除く</label>
     </div>
   </div>
 
@@ -259,15 +271,35 @@
     b.setAttribute('aria-pressed', on);
   }
   function syncStars() { document.querySelectorAll('.star').forEach(paintStar); }
+  // 一覧の開閉状態（端末ごとに記憶）
+  let favOpen = false;
+  try { favOpen = localStorage.getItem('artistFinder.fav_open') === '1'; } catch {}
+  function setFavOpen(open) {
+    favOpen = open;
+    try { localStorage.setItem('artistFinder.fav_open', open ? '1' : '0'); } catch {}
+    renderFavs();
+  }
   function renderFavs() {
     const list = $('favList');
+    const preview = $('favPreview');
+    const toggle = $('favToggle');
     list.innerHTML = '';
     $('favCount').textContent = favs.length ? '（' + favs.length + '組）' : '';
     $('recBtn').disabled = favs.length === 0;
+    toggle.hidden = favs.length === 0;
     if (!favs.length) {
-      list.innerHTML = '<span class="meta">まだありません。検索結果のカードの ☆ を押すと追加できます。</span>';
+      preview.textContent = 'まだありません。検索結果のカードの ☆ を押すと追加できます。';
+      preview.hidden = false;
+      list.hidden = true;
       return;
     }
+    // 閉じているときは、最近追加した3組だけを1行で表示
+    const recent = favs.slice(-3).reverse();
+    preview.textContent = recent.join('、') + (favs.length > 3 ? ' ほか' + (favs.length - 3) + '組' : '');
+    preview.hidden = favOpen;
+    list.hidden = !favOpen;
+    toggle.textContent = favOpen ? '閉じる ▲' : '一覧 ▼';
+    toggle.setAttribute('aria-expanded', favOpen);
     favs.forEach(f => {
       const c = document.createElement('span');
       c.className = 'chip';
@@ -288,6 +320,7 @@
   $('ghToken').value = store.get('gh_token');
   if (!store.get('lfm_key') && !store.get('gh_token')) $('settings').open = true;
   renderFavs();
+  $('favToggle').onclick = () => setFavOpen(!favOpen);
 
   $('saveBtn').onclick = async () => {
     const oldToken = store.get('gh_token');
