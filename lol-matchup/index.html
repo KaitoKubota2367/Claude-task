@@ -671,8 +671,14 @@ function renderMatch() {
   renderMatchInputs();
   const out = $('#match-out');
   const me = CHM[state.me], en = CHM[state.enemy];
-  if (!me || !en) {
-    out.innerHTML = `<div class="panel empty">「自分」と「対面」のチャンピオンを選ぶと、相性のポイントと対面に合わせたビルドを表示します。</div>`;
+  if (!me) {
+    out.innerHTML = `<div class="panel empty">「自分」のチャンピオンを選ぶと、勝率の高いビルドを表示します。「対面」も選ぶと、相性のポイントと対面に合わせたビルドも表示します。</div>`;
+    return;
+  }
+  if (!en) {
+    out.innerHTML = `<div class="panel" id="stats-out"><h2>勝率の高いビルド（統計）</h2><div class="muted small">統計データを読み込み中…</div></div>
+      <div class="panel empty">「対面」も選ぶと、相性のポイント・対面別のビルド・対面に合わせた調整も表示します。</div>`;
+    renderStats(me, null);
     return;
   }
   const role = state.role || me.role;
@@ -803,16 +809,24 @@ async function renderStats(me, en) {
   const avail = Object.keys(st.pos).sort((a, b) => st.pos[b].n - st.pos[a].n);
   const want = POS_OF_LANE[state.lane];
   const pos = avail.includes(want) ? want : avail[0];
-  const P = st.pos[pos], VS = P.vs[en.id];
-  const isVs = !!(VS && VS.n >= 8);
+  const P = st.pos[pos], VS = en ? P.vs[en.id] : null;
+  const vsOk = !!(VS && VS.n >= 8);
+  const isVs = vsOk && state.statScope !== 'all';
   const S = isVs ? VS : P;
 
   let h = head;
   h += `<p class="small muted" style="margin:0 0 8px">パッチ ${esc(idx.patch)}・日本/韓国のエメラルド以上・${esc(new Date(idx.updated).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }))}更新${idx.note ? '・' + esc(idx.note) : ''}</p>`;
   h += `<div class="chips" style="margin-bottom:10px">${avail.map(k => `<button class="chip" data-pos="${k}" aria-pressed="${k === pos}">${POS_JA[k]}（${st.pos[k].n}）</button>`).join('')}</div>`;
-  h += `<div class="rec" style="margin-bottom:12px"><div>${isVs
-    ? `<div class="muted small">${esc(me.name)}（${POS_JA[pos]}）対 ${esc(en.name)}</div><div class="big">${wrSpan(S.n, S.w)}</div>`
-    : `<div class="muted small">${esc(en.name)} との対戦データがまだ少ないため（${VS ? VS.n : 0}試合）、${esc(me.name)}（${POS_JA[pos]}）全体のデータを表示しています</div><div class="big">${wrSpan(S.n, S.w)}</div>`}</div></div>`;
+  if (en) {
+    h += `<div class="chips" style="margin-bottom:10px">
+      <button class="chip" data-scope="vs" aria-pressed="${isVs}" ${vsOk ? '' : 'disabled style="opacity:.5"'}>対 ${esc(en.name)}（${VS ? VS.n : 0}試合）</button>
+      <button class="chip" data-scope="all" aria-pressed="${!isVs}">対面問わず全体（${P.n}試合）</button></div>`;
+  }
+  let label;
+  if (isVs) label = `${esc(me.name)}（${POS_JA[pos]}）対 ${esc(en.name)} のビルド`;
+  else if (en && !vsOk) label = `${esc(en.name)} との対戦データがまだ少ないため（${VS ? VS.n : 0}試合）、${esc(me.name)}（${POS_JA[pos]}）の対面問わず全体のビルドを表示しています`;
+  else label = `${esc(me.name)}（${POS_JA[pos]}）の対面問わず全体のビルド`;
+  h += `<div class="rec" style="margin-bottom:12px"><div><div class="muted small">${label}</div><div class="big">${wrSpan(S.n, S.w)}</div></div></div>`;
 
   // ルーン
   if (S.runes.length) {
@@ -1035,6 +1049,8 @@ function bind() {
   $('#match-out').addEventListener('click', e => {
     const b = e.target.closest('[data-pos]');
     if (b) { state.lane = LANE_OF_POS[b.dataset.pos] || ''; save(); renderMatch(); }
+    const sc = e.target.closest('[data-scope]');
+    if (sc && !sc.disabled) { state.statScope = sc.dataset.scope; save(); renderStats(CHM[state.me], CHM[state.enemy] || null); }
   });
   $('#pick-out').addEventListener('click', e => {
     const d = e.target.closest('[data-detail]'), u = e.target.closest('[data-unpool]');
