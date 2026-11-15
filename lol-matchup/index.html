@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="相性ナビ">
+<meta name="theme-color" content="#0f1923">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>LoL 相性ナビ</title>
+<style>
+  :root {
+    --bg: #f4f2ed; --surface: #ffffff; --surface-2: #ebe8e1; --text: #1b1a17;
+    --muted: #67635b; --border: #dcd7cc; --accent: #8a6a24; --accent-soft: #f3ead6;
+    --win: #2b8a3e; --win-soft: #e3f4e6; --lose: #c92a2a; --lose-soft: #fbe5e5;
+    --ap: #6741d9; --ad: #d9480f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1923; --surface: #17222e; --surface-2: #213040; --text: #ece8df;
+      --muted: #9aa3ad; --border: #2c3b4b; --accent: #c8aa6e; --accent-soft: #2e2a1e;
+      --win: #69db7c; --win-soft: #1d3324; --lose: #ff8787; --lose-soft: #3a2024;
+      --ap: #b197fc; --ad: #ffa94d; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 96px; }
+  header.top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 8px 0 12px; }
+  header.top h1 { font-size: 1.35rem; margin: 0; letter-spacing: .02em; }
+  header.top .patch { color: var(--muted); font-size: .82rem; }
+  nav.tabs {
+    position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+    background: var(--bg); padding: 6px 0 10px;
+  }
+  nav.tabs button {
+    padding: 9px 4px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); font-size: .92rem; font-weight: 600; cursor: pointer;
+  }
+  nav.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .panel > h2 { font-size: 1rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .panel > h2 .hint { font-weight: 400; color: var(--muted); font-size: .8rem; }
+  .muted { color: var(--muted); }
+  .small { font-size: .84rem; }
+  button { font: inherit; }
+  .btn {
+    padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text); cursor: pointer; font-size: .9rem;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+  .btn.win { background: var(--win-soft); border-color: var(--win); color: var(--win); font-weight: 700; }
+  .btn.lose { background: var(--lose-soft); border-color: var(--lose); color: var(--lose); font-weight: 700; }
+  .btn.tiny { padding: 3px 9px; font-size: .78rem; border-radius: 8px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* 対面の選択 */
+  .versus { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+  .slot {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 120px;
+    padding: 10px 6px; border-radius: 12px; border: 1.5px dashed var(--border); background: var(--bg);
+    color: var(--text); cursor: pointer; text-align: center;
+  }
+  .slot.filled { border-style: solid; }
+  .slot .lbl { font-size: .74rem; color: var(--muted); }
+  .slot img { width: 64px; height: 64px; border-radius: 12px; }
+  .slot .nm { font-weight: 700; font-size: .95rem; line-height: 1.3; }
+  .slot .ph { font-size: 2rem; color: var(--muted); line-height: 64px; }
+  .vs { align-self: center; font-weight: 800; color: var(--accent); font-size: 1.1rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-size: .82rem; cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .opt { margin-top: 12px; display: grid; gap: 8px; }
+  .opt .k { font-size: .78rem; color: var(--muted); }
+  .team { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .mini { position: relative; width: 44px; height: 44px; }
+  .mini img { width: 44px; height: 44px; border-radius: 10px; display: block; }
+  .mini button {
+    position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; padding: 0;
+    border: none; background: var(--text); color: var(--bg); font-size: .7rem; cursor: pointer; line-height: 20px;
+  }
+  .addmini {
+    width: 44px; height: 44px; border-radius: 10px; border: 1.5px dashed var(--border); background: transparent;
+    color: var(--muted); font-size: 1.3rem; cursor: pointer;
+  }
+
+  /* タグ */
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; justify-content: center; }
+  .tag { font-size: .7rem; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+  .tag.ap { color: var(--ap); } .tag.ad { color: var(--ad); }
+  .tag.warn { background: var(--accent-soft); color: var(--accent); }
+
+  /* 相性 */
+  .tips { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .tips li { padding: 9px 12px; border-radius: 10px; background: var(--bg); border-left: 3px solid var(--accent); font-size: .92rem; }
+  .tips li b { color: var(--accent); }
+  .rec { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--bg); }
+  .rec .big { font-size: 1.25rem; font-weight: 800; }
+  .wr-good { color: var(--win); } .wr-bad { color: var(--lose); }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .links a {
+    display: inline-flex; align-items: center; gap: 4px; padding: 7px 12px; border-radius: 10px; text-decoration: none;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: .86rem;
+  }
+  .links a::after { content: "↗"; color: var(--muted); font-size: .8em; }
+  textarea, input[type=text], input[type=search] {
+    width: 100%; padding: 9px 11px; font: inherit; font-size: .95rem; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* ビルド */
+  .advice { display: grid; gap: 10px; }
+  .adv { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+  .adv h3 { margin: 0 0 2px; font-size: .95rem; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .adv .why { font-size: .84rem; color: var(--muted); margin: 0 0 8px; }
+  .prio { font-size: .68rem; padding: 1px 7px; border-radius: 999px; background: var(--lose-soft); color: var(--lose); font-weight: 700; }
+  .prio.mid { background: var(--accent-soft); color: var(--accent); }
+  .items { display: grid; gap: 6px; }
+  details.it { border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  details.it summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 6px 8px; cursor: pointer; }
+  details.it summary::-webkit-details-marker { display: none; }
+  details.it img { width: 36px; height: 36px; border-radius: 8px; flex: none; }
+  details.it .nm { font-weight: 600; font-size: .9rem; line-height: 1.3; }
+  details.it .sub { font-size: .74rem; color: var(--muted); }
+  details.it .desc { padding: 0 10px 10px 54px; font-size: .8rem; color: var(--muted); white-space: pre-line; }
+  details.it[open] summary .nm { color: var(--accent); }
+  .kind { font-size: .7rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+  /* ピック相談・記録 */
+  .list { display: grid; gap: 8px; }
+  .lrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); }
+  .lrow img { width: 42px; height: 42px; border-radius: 10px; flex: none; }
+  .lrow .main { flex: 1; min-width: 0; }
+  .lrow .main b { display: block; font-size: .93rem; line-height: 1.3; }
+  .lrow .main .tags { justify-content: flex-start; }
+  .lrow .side { text-align: right; font-size: .82rem; white-space: nowrap; }
+  .lrow .side .big { font-size: 1.05rem; font-weight: 800; display: block; }
+  .res { font-weight: 800; font-size: .82rem; padding: 1px 8px; border-radius: 6px; }
+  .res.w { background: var(--win-soft); color: var(--win); } .res.l { background: var(--lose-soft); color: var(--lose); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 8px 10px; text-align: center; }
+  .stat b { display: block; font-size: 1.2rem; }
+  .stat span { font-size: .74rem; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 18px 8px; font-size: .9rem; }
+
+  /* ピッカー */
+  dialog#picker {
+    width: min(720px, 100vw); max-width: 100vw; height: min(86vh, 900px); max-height: 100vh; margin: auto; padding: 0;
+    border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text);
+  }
+  dialog#picker::backdrop { background: rgba(0,0,0,.55); }
+  .pk { display: flex; flex-direction: column; height: 100%; }
+  .pk-head { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); display: grid; gap: 8px; }
+  .pk-head .row { justify-content: space-between; flex-wrap: nowrap; }
+  .pk-head b { font-size: 1rem; }
+  .pk-body { overflow-y: auto; padding: 10px 14px 18px; flex: 1; }
+  .pk-body h4 { margin: 6px 0; font-size: .78rem; color: var(--muted); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .grid button {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; border-radius: 10px;
+    border: 1px solid transparent; background: transparent; color: var(--text); cursor: pointer;
+  }
+  .grid button:hover, .grid button:focus-visible { border-color: var(--accent); outline: none; }
+  .grid button.on { background: var(--accent-soft); border-color: var(--accent); }
+  .grid img { width: 52px; height: 52px; border-radius: 10px; background: var(--surface-2); }
+  .grid span { font-size: .7rem; line-height: 1.2; text-align: center; word-break: break-all; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 999px; font-size: .88rem;
+    transition: .25s; pointer-events: none; z-index: 20; max-width: calc(100vw - 32px);
+  }
+  #toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .loading { text-align: center; padding: 48px 0; color: var(--muted); }
+  footer { margin-top: 24px; font-size: .74rem; color: var(--muted); line-height: 1.6; }
+  footer a { color: var(--muted); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <h1>LoL 相性ナビ</h1>
+    <span class="patch" id="patch"></span>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="match" aria-selected="true">対面・ビルド</button>
+    <button role="tab" data-tab="pick" aria-selected="false">ピック相談</button>
+    <button role="tab" data-tab="log" aria-selected="false">記録</button>
+  </nav>
+
+  <div id="loading" class="loading">チャンピオンデータを読み込み中…</div>
+
+  <!-- 対面・ビルド -->
+  <section id="tab-match" hidden>
+    <div class="panel">
+      <div class="versus">
+        <button class="slot" id="slot-me"></button>
+        <div class="vs">VS</div>
+        <button class="slot" id="slot-enemy"></button>
+      </div>
+      <div class="opt">
+        <div>
+          <div class="k">レーン</div>
+          <div class="chips" id="lanes"></div>
+        </div>
+        <div>
+          <div class="k">自分のビルドタイプ（自動判定。違うときは変更）</div>
+          <div class="chips" id="roles"></div>
+        </div>
+        <div>
+          <div class="k">ほかの敵チャンピオン（任意・最大4体。入れるとチーム全体に合わせたビルドになります）</div>
+          <div class="team" id="team"></div>
+        </div>
+      </div>
+    </div>
+    <div id="match-out"></div>
+  </section>
+
+  <!-- ピック相談 -->
+  <section id="tab-pick" hidden>
+    <div class="panel">
+      <h2>相手のチャンピオン <span class="hint">ピック画面で見えている対面を選択</span></h2>
+      <div class="row">
+        <button class="slot" id="pick-enemy" style="min-height:96px;flex:0 0 120px"></button>
+        <div class="muted small" style="flex:1;min-width:180px">
+          「マイプール」（よく使うチャンピオン）の中から、この相手に対する<b>自分の過去の勝率</b>と<b>タイプ相性</b>で並べます。記録が増えるほど正確になります。
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>マイプール <span class="hint" id="pool-count"></span></h2>
+      <div id="pick-out"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="pool-edit">＋ プールを編集</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 記録 -->
+  <section id="tab-log" hidden>
+    <div class="panel">
+      <h2>成績</h2>
+      <div id="log-stats"></div>
+    </div>
+    <div class="panel">
+      <h2>苦手な相手 <span class="hint">2試合以上・負け越し順</span></h2>
+      <div id="log-hard"></div>
+    </div>
+    <div class="panel">
+      <h2>試合の記録</h2>
+      <div id="log-list"></div>
+    </div>
+    <div class="panel">
+      <h2>バックアップ</h2>
+      <p class="muted small" style="margin:0 0 10px">記録・メモ・マイプールはこの端末のブラウザ内に保存されています。機種変更や別端末へ移すときはファイルに書き出してください。</p>
+      <div class="row">
+        <button class="btn" id="export">ファイルに書き出す</button>
+        <button class="btn" id="import">ファイルから読み込む</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    チャンピオン・アイテム・ルーンの情報は Riot Games の Data Dragon から最新パッチのものを読み込んでいます。
+    相性やビルドの提案は、チャンピオンのタイプ（射程・ダメージの種類・回復やCCなどの特徴）から自動で出した目安です。実際の勝率は各統計サイトへのリンクで確認してください。<br>
+    LoL 相性ナビ は Riot Games の公認を受けたものではなく、Riot Games やリーグ・オブ・レジェンドの制作・管理に関わる人の見解を反映するものではありません。League of Legends は Riot Games, Inc. の商標です。
+  </footer>
+</main>
+
+<dialog id="picker">
+  <div class="pk">
+    <div class="pk-head">
+      <div class="row">
+        <b id="pk-title">チャンピオンを選択</b>
+        <button class="btn tiny" id="pk-close">閉じる</button>
+      </div>
+      <input type="search" id="pk-q" placeholder="名前で検索（ひらがな・カタカナ・英語）" autocomplete="off">
+    </div>
+    <div class="pk-body" id="pk-body"></div>
+  </div>
+</dialog>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const DD = 'https://ddragon.leagueoflegends.com';
+const LS = 'lolMatchup.';
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(LS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(LS + k, JSON.stringify(v)); } catch (e) {} },
+};
+
+/* ---------- チャンピオンの特徴（手入力の補足データ） ----------
+   Data Dragon にはダメージの種類や回復・CC などの情報が無いので、主なものだけ補っている。
+   書かれていないチャンピオンは Data Dragon のタグと数値だけで判定する。 */
+const DMG = { // 主なダメージの種類（Data Dragon の数値だと誤判定するもの）
+  Belveth:'AD', Jax:'MIX', Kayle:'AP', Corki:'MIX', Kaisa:'MIX', Akshan:'AD', Rell:'AP', Seraphine:'AP', Vex:'AP',
+  Qiyana:'AD', Gwen:'AP', Volibear:'MIX', TwistedFate:'AP', Ornn:'MIX', Shen:'MIX', Rammus:'MIX', Leona:'AP',
+  Braum:'AP', Alistar:'AP', Taric:'AP', Thresh:'AP', Pyke:'AD', Senna:'AD', Shaco:'AD', Lillia:'AP', KSante:'AD',
+  Skarner:'MIX', Sion:'AD', Poppy:'AD', Nasus:'AD', Ezreal:'AD', Jhin:'AD', Teemo:'AP', Hwei:'AP', Elise:'AP',
+  Diana:'AP', Ekko:'AP', Kennen:'AP', Azir:'AP', Katarina:'AP', Akali:'AP', Evelynn:'AP', Fizz:'AP', Nidalee:'AP',
+  Rakan:'AP', Shyvana:'MIX', Locke:'AD', Ambessa:'AD', Naafiri:'AD', Yunara:'AD', Zaahen:'AD',
+};
+const ROLE = { Pyke:'ad', Senna:'adc' };
+const TRAIT_LIST = {
+  h: 'Aatrox Vladimir Soraka Yuumi Sylas DrMundo Warwick Fiddlesticks Swain Briar Illaoi Olaf Nami Sona Seraphine Milio Volibear Gwen Samira Aphelios Kayn Renekton Trundle Nasus Fiora MasterYi Viego Belveth Taric Nidalee Maokai Zac Ekko Rengar Gangplank Kindred',
+  s: 'Lulu Janna Karma Sett Mordekaiser Riven Yasuo Seraphine Lux Morgana Ivern Orianna Taric Rakan Shen Sion Skarner Urgot Galio Malphite Rumble Milio Yuumi Ekko Kassadin Diana Viktor Vi Poppy Rell Thresh Annie Ambessa Camille Nautilus Sona Garen Senna JarvanIV Blitzcrank TahmKench',
+  c: 'Leona Nautilus Alistar Thresh Blitzcrank Rell Rakan Amumu Sejuani Maokai Malphite Morgana Lissandra Ashe Annie Veigar Zyra Neeko Lux Skarner Zac Nunu Vi Warwick Rammus Poppy Sion Galio Ornn Braum Taric Bard JarvanIV Pantheon Malzahar Syndra Seraphine Taliyah Gnar Sett Fiddlesticks Hecarim Lillia Swain Viktor Orianna Zilean TahmKench Nami Janna Lulu Renata Pyke Yasuo Yone KSante Camille Irelia Chogath Volibear Kennen Varus',
+  p: 'Xerath Velkoz Jayce Ziggs Lux Zoe Nidalee Varus Ezreal Caitlyn Corki Hwei Jhin Karma Brand Mel Gangplank Teemo Heimerdinger Senna Smolder Taliyah Syndra Orianna',
+  b: 'Annie Veigar Syndra Lux Brand Vex Malphite Ahri Diana Leblanc Pyke Rengar Khazix Zed Talon Kayn Evelynn Fizz Kassadin Katarina Akali Qiyana Naafiri Nocturne Shaco Elise Nidalee Ekko Sylas Aurora',
+  i: 'Evelynn Twitch Shaco Akali Rengar Khazix Vayne MonkeyKing Talon Pyke Teemo Senna Qiyana',
+};
+const TRAITS = {};
+for (const [t, s] of Object.entries(TRAIT_LIST)) for (const id of s.split(' ')) (TRAITS[id] = TRAITS[id] || new Set()).add(t);
+const TRAIT_JA = { h:'回復が多い', s:'シールド', c:'CCが多い', p:'ポーク', b:'バースト', i:'ステルス' };
+const TAG_JA = { Fighter:'ファイター', Tank:'タンク', Mage:'メイジ', Assassin:'アサシン', Marksman:'マークスマン', Support:'サポート' };
+const ROLE_JA = { ad:'AD', adc:'ADC', ap:'AP', tank:'タンク', sup:'サポート' };
+const ROLE_DESC = { ad:'AD（ファイター・アサシン）', adc:'ADC（マークスマン）', ap:'AP（メイジ）', tank:'タンク', sup:'サポート（エンチャンター）' };
+const LANES = [
+  { k:'top', ja:'トップ', lol:'top', op:'top' },
+  { k:'jungle', ja:'ジャングル', lol:'jungle', op:'jungle' },
+  { k:'mid', ja:'ミッド', lol:'middle', op:'mid' },
+  { k:'bot', ja:'ボット', lol:'bottom', op:'adc' },
+  { k:'sup', ja:'サポート', lol:'support', op:'support' },
+];
+
+/* ---------- 対策アイテム（ビルドタイプごと） ----------
+   アイテムIDで指定し、現パッチに存在しないものは自動で表示しない。 */
+const ITEMSET = {
+  antiheal:  { ad:[3123,6609,3033], adc:[3123,3033], ap:[3916,3165], tank:[3076,3075], sup:[3916,3165] },
+  mr:        { ad:[3156,3091,3053], adc:[3156,3139], ap:[3102], tank:[2504,4401,3065,6665,8020], sup:[3222,3190] },
+  armor:     { ad:[6333,3026,3053], adc:[3026,6673], ap:[3157], tank:[3075,3110,3143,2502,6662], sup:[3109,3190] },
+  burst:     { ad:[3026,3814,3053,6333], adc:[3026,6673,3139], ap:[3157,3102], tank:[2504,3143], sup:[3222,3190] },
+  cc:        { ad:[3111,3053,3139], adc:[3111,3139], ap:[3111,3102], tank:[3111,6665], sup:[3111,3222] },
+  pen:       { ad:[3071,3036,6694,3302], adc:[3036,3302], ap:[3135,3137,6653], tank:[], sup:[] },
+  antiAS:    { ad:[3047], adc:[3047], ap:[3047], tank:[3110,3143,3047], sup:[3047] },
+  shield:    { ad:[6695], adc:[6695], ap:[], tank:[], sup:[] },
+  stealth:   { ad:[2055,3364], adc:[2055,3364], ap:[2055,3364], tank:[2055,3364], sup:[2055,3364] },
+};
+const BOOTS_DEFAULT = { ad:3047, adc:3006, ap:3020, tank:3047, sup:3158 };
+const RUNE = { secondWind:8444, bonePlating:8473, unflinching:8242, cutDown:8017 };
+
+/* ---------- 状態 ---------- */
+let V = '', CH = [], CHM = {}, ITEMS = {}, RUNES = {}, SPELLS = {};
+const state = Object.assign({ tab:'match', me:null, enemy:null, team:[], lane:'', role:'', pickEnemy:null }, store.get('state', {}));
+let records = store.get('records', []);   // { t, me, vs, win, lane, note }
+let notes = store.get('notes', {});       // "me|vs" -> メモ
+let pool = store.get('pool', []);
+let recent = store.get('recent', []);
+const save = () => store.set('state', state);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const norm = s => String(s).normalize('NFKC').toLowerCase()
+  .replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+  .replace(/[\s・=＝.'’&＆]/g, '');
+const champImg = c => `${DD}/cdn/${V}/img/champion/${c.image.full}`;
+const itemImg = id => `${DD}/cdn/${V}/img/item/${id}.png`;
+const lolSlug = id => id === 'MonkeyKing' ? 'wukong' : id.toLowerCase();
+const laneOf = k => LANES.find(l => l.k === k);
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200);
+}
+function plain(html) {
+  return String(html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/* ---------- データ読み込み ---------- */
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status + ' ' + url);
+  return r.json();
+}
+async function load() {
+  try {
+    const vs = await getJSON(`${DD}/api/versions.json`);
+    V = vs[0]; store.set('version', V);
+  } catch (e) {
+    V = store.get('version', '');
+    if (!V) throw e;
+  }
+  const [c, i, r, s] = await Promise.all(['champion', 'item', 'runesReforged', 'summoner']
+    .map(n => getJSON(`${DD}/cdn/${V}/data/ja_JP/${n}.json`)));
+  for (const x of Object.values(c.data)) {
+    const dmg = DMG[x.id] || (x.info.magic > x.info.attack ? 'AP' : 'AD');
+    const tr = new Set(TRAITS[x.id] || []);
+    if (x.tags.includes('Assassin')) tr.add('b');
+    const ch = {
+      id: x.id, name: x.name, title: x.title, tags: x.tags, image: x.image, dmg, tr,
+      ranged: x.stats.attackrange >= 325,
+      tank: x.tags[0] === 'Tank' || x.info.defense >= 8,
+      q: norm(x.name) + ' ' + norm(x.id) + ' ' + norm(x.title),
+    };
+    ch.role = autoRole(ch);
+    CH.push(ch); CHM[ch.id] = ch;
+  }
+  CH.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  ITEMS = i.data;
+  for (const tree of r) for (const slot of tree.slots) for (const ru of slot.runes) RUNES[ru.id] = { ...ru, tree: tree.name };
+  SPELLS = s.data;
+  // 削除されたチャンピオンが保存データに残っていたら外す
+  if (state.me && !CHM[state.me]) state.me = null;
+  if (state.enemy && !CHM[state.enemy]) state.enemy = null;
+  if (state.pickEnemy && !CHM[state.pickEnemy]) state.pickEnemy = null;
+  state.team = state.team.filter(id => CHM[id]);
+  pool = pool.filter(id => CHM[id]);
+}
+function autoRole(c) {
+  if (ROLE[c.id]) return ROLE[c.id];
+  if (c.tags[0] === 'Tank') return 'tank';
+  if (c.tags[0] === 'Support') return 'sup';
+  if (c.tags.includes('Marksman') && c.dmg !== 'AP' && c.ranged) return 'adc';
+  return c.dmg === 'AP' ? 'ap' : 'ad';
+}
+
+/* ---------- 共通の表示部品 ---------- */
+function dmgTag(c) {
+  if (c.dmg === 'AP') return '<span class="tag ap">魔法ダメージ</span>';
+  if (c.dmg === 'AD') return '<span class="tag ad">物理ダメージ</span>';
+  return '<span class="tag">物理＋魔法</span>';
+}
+function champTags(c, withTraits = true) {
+  let h = `<span class="tag">${c.ranged ? '遠距離' : '近接'}</span>${dmgTag(c)}`;
+  h += c.tags.map(t => `<span class="tag">${TAG_JA[t] || t}</span>`).join('');
+  if (withTraits) h += [...c.tr].map(t => `<span class="tag warn">${TRAIT_JA[t]}</span>`).join('');
+  return h;
+}
+function slotHTML(id, label) {
+  const c = CHM[id];
+  if (!c) return `<span class="lbl">${label}</span><span class="ph">＋</span><span class="muted small">タップして選択</span>`;
+  return `<span class="lbl">${label}</span><img src="${champImg(c)}" alt=""><span class="nm">${esc(c.name)}</span>`;
+}
+function itemHTML(id, kind) {
+  const it = ITEMS[id];
+  if (!it) return '';
+  const cost = it.gold && it.gold.total ? `${it.gold.total}G` : '';
+  return `<details class="it"><summary><img src="${itemImg(id)}" alt="" loading="lazy">
+    <div><div class="nm">${esc(it.name)}</div><div class="sub">${cost}${it.plaintext ? '・' + esc(it.plaintext) : ''}</div></div>
+    ${kind ? `<span class="kind">${kind}</span>` : ''}</summary>
+    <div class="desc">${esc(plain(it.description))}</div></details>`;
+}
+function runeHTML(id) {
+  const r = RUNES[id];
+  if (!r) return '';
+  return `<details class="it"><summary><img src="${DD}/cdn/img/${r.icon}" alt="" loading="lazy">
+    <div><div class="nm">${esc(r.name)}</div><div class="sub">ルーン・${esc(r.tree)}</div></div><span class="kind">ルーン</span></summary>
+    <div class="desc">${esc(plain(r.shortDesc))}</div></details>`;
+}
+function spellHTML(key) {
+  const s = SPELLS[key];
+  if (!s) return '';
+  return `<details class="it"><summary><img src="${DD}/cdn/${V}/img/spell/${s.image.full}" alt="" loading="lazy">
+    <div><div class="nm">${esc(s.name)}</div><div class="sub">サモナースペル</div></div><span class="kind">スペル</span></summary>
+    <div class="desc">${esc(plain(s.description))}</div></details>`;
+}
+function record(me, vs) {
+  const rs = records.filter(r => (!me || r.me === me) && r.vs === vs);
+  const w = rs.filter(r => r.win).length;
+  return { n: rs.length, w, l: rs.length - w };
+}
+function wrHTML(rec) {
+  if (!rec.n) return '<span class="muted">記録なし</span>';
+  const p = Math.round(rec.w / rec.n * 100);
+  return `<span class="${p >= 55 ? 'wr-good' : p <= 45 ? 'wr-bad' : ''}">${rec.w}勝${rec.l}敗（${p}%）</span>`;
+}
+
+/* ---------- 分析（ルールベース） ---------- */
+function laneTips(me, en) {
+  const tips = [];
+  const myRole = state.role || me.role;
+  const squishy = ['adc', 'ap', 'sup'].includes(myRole);
+  if (!me.ranged && en.ranged) {
+    tips.push('<b>射程で不利</b>：相手は遠距離。ミニオンの後ろでスキルを避け、無理に通常攻撃で張り合わない。相手の主要スキルを外させてから一気に詰めるのが基本。');
+  } else if (me.ranged && !en.ranged) {
+    tips.push('<b>射程で有利</b>：相手は近接。通常攻撃やスキルで少しずつ削り、相手の接近スキルがクールダウン中のときに積極的に攻める。接近スキルが上がっている間は距離を取る。');
+  } else if (!me.ranged && !en.ranged) {
+    tips.push('<b>近接同士</b>：レベル2・3の先行やミニオンの数で有利・不利が大きく変わる。相手のスキルのクールダウンを見て短いトレードを繰り返す。');
+  } else {
+    tips.push('<b>遠距離同士</b>：スキルの当て合い。ミニオンを盾にしながら、相手が主要スキルを外した直後に反撃する。');
+  }
+  if (en.dmg === 'AP') tips.push(`<b>${esc(en.name)}は魔法ダメージ</b>：魔法防御を早めに少し積むと、レーン戦がかなり楽になる。`);
+  else if (en.dmg === 'AD') tips.push(`<b>${esc(en.name)}は物理ダメージ</b>：物理防御を早めに少し積むと、レーン戦がかなり楽になる。`);
+  else tips.push(`<b>${esc(en.name)}は物理と魔法の両方</b>：片方の防御だけでは足りないので、体力を多めに確保する。`);
+  if (en.tr.has('b')) tips.push(squishy
+    ? '<b>バーストに注意</b>：一瞬で大ダメージを出す相手。特にレベル6（ウルト習得）以降は体力を高く保ち、フラッシュを温存する。'
+    : '<b>バーストに注意</b>：一瞬で大ダメージを出す相手。主要スキルを使わせてから反撃すると勝ちやすい。');
+  if (en.tr.has('h')) tips.push('<b>回復が多い</b>：長く戦うほど相手が有利。短く一気に倒し切るか、「負傷」（回復量低下）を与えるアイテム・イグナイトを用意する。');
+  if (en.tr.has('p')) tips.push('<b>遠くから削ってくる（ポーク）</b>：体力管理が重要。ミニオンを盾にし、ルーン「息継ぎ」や回復ポーションで粘る。');
+  if (en.tr.has('c')) tips.push('<b>CC（スタン・拘束など）が多い</b>：CCを受けてから味方ジャングラーと合わせてくる危険がある。視界を取り、行動妨害耐性も検討。');
+  if (en.tr.has('s')) tips.push('<b>シールドを張る</b>：シールドが切れたタイミングで攻めると効率が良い。');
+  if (en.tr.has('i')) tips.push('<b>ステルス（透明化）を持つ</b>：コントロールワードやオラクルレンズで視界を確保する。');
+  if (en.tank && ['ad', 'adc', 'ap'].includes(myRole)) tips.push('<b>相手は硬い</b>：一気に倒すのは難しいので、貫通アイテムや割合ダメージで長期戦に備える。');
+  if (myRole === 'tank' && !en.tank) tips.push('<b>自分はタンク</b>：レーン戦で無理に倒そうとせず、ミニオンを処理して集団戦で活躍することを優先。');
+  return tips;
+}
+
+function analyze(me, en, team, role) {
+  const enemies = [en, ...team.map(id => CHM[id]).filter(Boolean)].filter((c, i, a) => c && a.indexOf(c) === i);
+  const W = c => (c === en ? 2 : 1);
+  let ap = 0, ad = 0, tot = 0;
+  for (const c of enemies) {
+    const w = W(c); tot += w;
+    if (c.dmg === 'AP') ap += w; else if (c.dmg === 'AD') ad += w; else { ap += w / 2; ad += w / 2; }
+  }
+  const has = t => enemies.filter(c => c.tr.has(t));
+  const ratio = list => list.reduce((s, c) => s + W(c), 0) / tot;
+  const names = list => list.map(c => c.name).join('・');
+  const heal = has('h'), cc = has('c'), burst = has('b'), stealth = has('i'), shield = has('s');
+  const tanks = enemies.filter(c => c.tank);
+  const adcs = enemies.filter(c => c.role === 'adc');
+  const apR = ap / tot, adR = ad / tot;
+  const out = [];
+  const pick = k => (ITEMSET[k][role] || []).filter(id => ITEMS[id]);
+
+  if (heal.length) out.push({
+    prio: heal.includes(en) || heal.length >= 2 ? 'hi' : 'mid', title: '回復対策（負傷）',
+    why: `${names(heal)} は回復量が多いチャンピオンです。「負傷」で回復量を下げましょう。安い素材アイテムを先に買うだけでも効果があります。`,
+    items: pick('antiheal'), spells: role === 'adc' ? [] : ['SummonerDot'],
+  });
+  if (apR >= 0.5) out.push({
+    prio: apR >= 0.7 ? 'hi' : 'mid', title: '魔法防御',
+    why: `敵のダメージの約${Math.round(apR * 100)}%が魔法ダメージです。`,
+    items: pick('mr'),
+  });
+  if (adR >= 0.5) out.push({
+    prio: adR >= 0.7 ? 'hi' : 'mid', title: '物理防御',
+    why: `敵のダメージの約${Math.round(adR * 100)}%が物理ダメージです。`,
+    items: pick('armor'),
+  });
+  if (burst.includes(en) || burst.length >= 2) out.push({
+    prio: burst.includes(en) && ['adc', 'ap', 'sup'].includes(role) ? 'hi' : 'mid', title: 'バースト対策',
+    why: `${names(burst)} は一瞬で大ダメージを出してきます。耐えるためのアイテムやルーンが有効です。`,
+    items: pick('burst'), runes: [RUNE.bonePlating],
+    spells: role === 'sup' ? ['SummonerExhaust'] : ['SummonerBarrier', 'SummonerExhaust'],
+  });
+  if (ratio(cc) >= 0.5) out.push({
+    prio: ratio(cc) >= 0.7 ? 'hi' : 'mid', title: 'CC対策（行動妨害耐性）',
+    why: `${names(cc)} はスタンや拘束などのCCが多いチャンピオンです。`,
+    items: pick('cc'), runes: [RUNE.unflinching], spells: ['adc', 'ap'].includes(role) ? ['SummonerBoost'] : [],
+  });
+  if (tanks.length && ratio(tanks) >= 0.4 && ['ad', 'adc', 'ap'].includes(role)) out.push({
+    prio: 'mid', title: '硬い相手への対策（貫通・割合ダメージ）',
+    why: `${names(tanks)} は防御や体力が高いチャンピオンです。`,
+    items: pick('pen'), runes: [RUNE.cutDown],
+  });
+  if (adcs.length && (role === 'tank' || adcs.includes(en))) out.push({
+    prio: 'mid', title: '通常攻撃（マークスマン）対策',
+    why: `${names(adcs)} は通常攻撃が主なダメージ源です。攻撃速度を下げたり、通常攻撃のダメージを軽減するアイテムが有効です。`,
+    items: pick('antiAS'),
+  });
+  if (shield.length && ratio(shield) >= 0.4 && ['ad', 'adc'].includes(role)) out.push({
+    prio: 'mid', title: 'シールド対策',
+    why: `${names(shield)} はシールドを張ります。`,
+    items: pick('shield'),
+  });
+  if (en.tr.has('p') || (!me.ranged && en.ranged)) out.push({
+    prio: en.tr.has('p') && !me.ranged ? 'hi' : 'mid', title: 'レーン序盤の削り合い対策',
+    why: !me.ranged && en.ranged
+      ? `${en.name} は遠距離から削ってきます。近接の場合はドランシールドやルーン「息継ぎ」でレーンを安定させましょう。`
+      : `${en.name} は遠くから削ってきます。ルーン「息継ぎ」で体力を維持しやすくなります。`,
+    items: !me.ranged && ['ad', 'tank'].includes(role) ? [1054].filter(id => ITEMS[id]) : [],
+    runes: [RUNE.secondWind],
+  });
+  if (stealth.length) out.push({
+    prio: 'mid', title: 'ステルス対策（視界）',
+    why: `${names(stealth)} は透明になれます。コントロールワードを常に1つ持ち、オラクルレンズも検討しましょう。`,
+    items: pick('stealth'),
+  });
+
+  // ブーツ
+  let boots = BOOTS_DEFAULT[role], bootsWhy = `${ROLE_JA[role]}で一般的なブーツ`;
+  if (apR >= 0.6 || ratio(cc) >= 0.6) { boots = 3111; bootsWhy = apR >= 0.6 ? '魔法ダメージが多い敵構成' : 'CCが多い敵構成'; }
+  else if (adR >= 0.6 && (role !== 'adc' || adcs.length + enemies.filter(c => c.dmg === 'AD' && c.tr.has('b')).length >= 2)) {
+    boots = 3047; bootsWhy = '物理ダメージ（通常攻撃）が多い敵構成';
+  }
+  if (!ITEMS[boots]) boots = null;
+
+  const order = { hi: 0, mid: 1 };
+  out.sort((a, b) => order[a.prio] - order[b.prio]);
+  return { out, boots, bootsWhy, apR, adR, enemies };
+}
+
+/* ---------- 対面・ビルドタブ ---------- */
+function renderMatchInputs() {
+  $('#slot-me').innerHTML = slotHTML(state.me, '自分');
+  $('#slot-me').classList.toggle('filled', !!state.me);
+  $('#slot-enemy').innerHTML = slotHTML(state.enemy, '対面');
+  $('#slot-enemy').classList.toggle('filled', !!state.enemy);
+  $('#lanes').innerHTML = LANES.map(l => `<button class="chip" data-lane="${l.k}" aria-pressed="${state.lane === l.k}">${l.ja}</button>`).join('');
+  const auto = state.me ? CHM[state.me].role : '';
+  $('#roles').innerHTML = Object.keys(ROLE_JA).map(r =>
+    `<button class="chip" data-role="${r}" aria-pressed="${(state.role || auto) === r}">${ROLE_JA[r]}${r === auto ? '（自動）' : ''}</button>`).join('');
+  $('#team').innerHTML = state.team.map((id, i) =>
+    `<div class="mini"><img src="${champImg(CHM[id])}" alt="${esc(CHM[id].name)}" title="${esc(CHM[id].name)}"><button data-rm="${i}" aria-label="外す">✕</button></div>`).join('')
+    + (state.team.length < 4 ? '<button class="addmini" id="team-add" aria-label="敵を追加">＋</button>' : '');
+}
+
+function renderMatch() {
+  renderMatchInputs();
+  const out = $('#match-out');
+  const me = CHM[state.me], en = CHM[state.enemy];
+  if (!me || !en) {
+    out.innerHTML = `<div class="panel empty">「自分」と「対面」のチャンピオンを選ぶと、相性のポイントと対面に合わせたビルドを表示します。</div>`;
+    return;
+  }
+  const role = state.role || me.role;
+  const lane = laneOf(state.lane);
+  const rec = record(me.id, en.id);
+  const recAll = record(null, en.id);
+  const A = analyze(me, en, state.team, role);
+  const key = me.id + '|' + en.id;
+  const laneQ = lane ? `?lane=${lane.lol}` : '';
+  const opLane = lane ? '/' + lane.op : '';
+
+  let h = '';
+  h += `<div class="panel"><h2>相性のポイント</h2>
+    <div class="row" style="gap:12px;margin-bottom:10px;align-items:flex-start">
+      <div style="flex:1;min-width:140px;text-align:center"><b>${esc(me.name)}</b><div class="muted small">${esc(me.title)}</div><div class="tags">${champTags(me)}</div></div>
+      <div style="flex:1;min-width:140px;text-align:center"><b>${esc(en.name)}</b><div class="muted small">${esc(en.title)}</div><div class="tags">${champTags(en)}</div></div>
+    </div>
+    <ul class="tips">${laneTips(me, en).map(t => `<li>${t}</li>`).join('')}</ul>
+    <p class="muted small" style="margin:10px 0 0">※チャンピオンのタイプから自動で出した目安です。実際の勝率は下の統計サイトで確認できます。</p>
+  </div>`;
+
+  h += `<div class="panel"><h2>あなたの成績</h2>
+    <div class="rec"><div><div class="muted small">${esc(me.name)} で ${esc(en.name)} と対戦</div><div class="big">${wrHTML(rec)}</div></div>
+      ${recAll.n > rec.n ? `<div class="small muted">全チャンピオンでの ${esc(en.name)} 戦：${wrHTML(recAll)}</div>` : ''}</div>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="rec-note" placeholder="一言メモ（任意）例：レベル6のオールインで負けた" style="flex:1 1 220px;width:auto">
+      <button class="btn win" data-result="1">勝ち</button><button class="btn lose" data-result="0">負け</button>
+    </div>
+    <div style="margin-top:12px"><div class="muted small" style="margin-bottom:4px">この対面のメモ（自動保存）</div>
+      <textarea id="mu-note" placeholder="気づいたこと・相手の強い時間帯・有効だったビルドなど">${esc(notes[key] || '')}</textarea></div>
+  </div>`;
+
+  h += `<div class="panel"><h2>統計サイトで確認</h2>
+    <div class="links">
+      <a href="https://lolalytics.com/lol/${lolSlug(me.id)}/vs/${lolSlug(en.id)}/build/${laneQ}" target="_blank" rel="noopener">LoLalytics：この対面の勝率</a>
+      <a href="https://lolalytics.com/lol/${lolSlug(me.id)}/build/${laneQ}" target="_blank" rel="noopener">LoLalytics：${esc(me.name)} のビルド</a>
+      <a href="https://www.op.gg/champions/${me.id.toLowerCase()}/build${opLane}" target="_blank" rel="noopener">OP.GG：${esc(me.name)} のビルド</a>
+      <a href="https://www.op.gg/champions/${me.id.toLowerCase()}/counters${opLane}" target="_blank" rel="noopener">OP.GG：${esc(me.name)} のカウンター</a>
+    </div>
+    <p class="muted small" style="margin:8px 0 0">コアビルド（毎試合買う基本アイテム）は統計サイトで確認し、下の「対面に合わせた調整」で入れ替えるのがおすすめです。</p>
+  </div>`;
+
+  h += `<div class="panel"><h2>対面に合わせた調整 <span class="hint">ビルドタイプ：${ROLE_DESC[role]}</span></h2>`;
+  if (A.enemies.length > 1) {
+    h += `<p class="small muted" style="margin:0 0 10px">敵 ${A.enemies.length}体（対面は2倍で計算）：魔法ダメージ 約${Math.round(A.apR * 100)}% ／ 物理ダメージ 約${Math.round(A.adR * 100)}%</p>`;
+  }
+  h += '<div class="advice">';
+  if (A.boots) h += `<div class="adv"><h3>ブーツ</h3><p class="why">${esc(A.bootsWhy)}</p><div class="items">${itemHTML(A.boots, 'ブーツ')}</div></div>`;
+  for (const a of A.out) {
+    const body = (a.items || []).map(id => itemHTML(id, ITEMS[id] && ITEMS[id].gold.total < 1200 ? '素材' : '')).join('')
+      + (a.runes || []).map(runeHTML).join('') + (a.spells || []).map(spellHTML).join('');
+    if (!body) continue;
+    h += `<div class="adv"><h3>${esc(a.title)} ${a.prio === 'hi' ? '<span class="prio">優先</span>' : '<span class="prio mid">状況次第</span>'}</h3>
+      <p class="why">${esc(a.why)}</p><div class="items">${body}</div></div>`;
+  }
+  h += '</div><p class="muted small" style="margin:10px 0 0">アイテムをタップすると効果を表示します。全部買う必要はなく、各項目から1つ選べば十分です。</p></div>';
+  out.innerHTML = h;
+
+  $('#mu-note').addEventListener('input', e => {
+    const v = e.target.value.trim();
+    if (v) notes[key] = e.target.value; else delete notes[key];
+    store.set('notes', notes);
+  });
+  out.querySelectorAll('[data-result]').forEach(b => b.addEventListener('click', () => {
+    records.push({ t: Date.now(), me: me.id, vs: en.id, win: b.dataset.result === '1', lane: state.lane || '', note: $('#rec-note').value.trim() });
+    store.set('records', records);
+    toast(b.dataset.result === '1' ? '勝ちを記録しました' : '負けを記録しました');
+    renderMatch();
+  }));
+}
+
+/* ---------- ピック相談タブ ---------- */
+function quickNotes(me, en) {
+  const t = [];
+  if (me.ranged && !en.ranged) t.push('<span class="tag">射程有利</span>');
+  if (!me.ranged && en.ranged) t.push('<span class="tag warn">射程不利</span>');
+  if (en.tr.has('h')) t.push('<span class="tag warn">負傷アイテム推奨</span>');
+  if (en.tr.has('b') && ['adc', 'ap', 'sup'].includes(me.role)) t.push('<span class="tag warn">バースト注意</span>');
+  if (en.tank && ['ad', 'adc', 'ap'].includes(me.role)) t.push('<span class="tag">貫通推奨</span>');
+  return t.join('');
+}
+function renderPick() {
+  const en = CHM[state.pickEnemy];
+  $('#pick-enemy').innerHTML = slotHTML(state.pickEnemy, '相手');
+  $('#pick-enemy').classList.toggle('filled', !!en);
+  $('#pool-count').textContent = pool.length ? `${pool.length}体` : '';
+  const out = $('#pick-out');
+  if (!pool.length) {
+    out.innerHTML = '<div class="empty">よく使うチャンピオンを「マイプール」に追加してください。</div>';
+    return;
+  }
+  const rows = pool.map(id => CHM[id]).map(c => {
+    const r = en ? record(c.id, en.id) : { n: 0, w: 0, l: 0 };
+    // ベイズ平均：試合数が少ないうちは50%に寄せる
+    let score = (r.w + 1) / (r.n + 2);
+    if (en) { if (c.ranged && !en.ranged) score += 0.02; if (!c.ranged && en.ranged) score -= 0.02; }
+    return { c, r, score };
+  });
+  if (en) rows.sort((a, b) => b.score - a.score || b.r.n - a.r.n);
+  out.innerHTML = '<div class="list">' + rows.map(({ c, r }) => `
+    <div class="lrow">
+      <img src="${champImg(c)}" alt="">
+      <div class="main"><b>${esc(c.name)}</b><div class="tags">${en ? quickNotes(c, en) : champTags(c, false)}</div></div>
+      <div class="side">${en ? `<span class="big">${r.n ? Math.round(r.w / r.n * 100) + '%' : '―'}</span>${r.n ? `${r.w}勝${r.l}敗` : '記録なし'}` : ''}
+        <div class="row" style="justify-content:flex-end;margin-top:4px;gap:4px">
+          ${en ? `<button class="btn tiny" data-detail="${c.id}">詳しく</button>` : ''}
+          <button class="btn tiny" data-unpool="${c.id}" aria-label="プールから外す">✕</button>
+        </div>
+      </div>
+    </div>`).join('') + '</div>'
+    + (en ? `<div class="links" style="margin-top:12px"><a href="https://lolalytics.com/lol/${lolSlug(en.id)}/counters/" target="_blank" rel="noopener">LoLalytics：${esc(en.name)} に強いチャンピオン</a><a href="https://www.op.gg/champions/${en.id.toLowerCase()}/counters" target="_blank" rel="noopener">OP.GG：${esc(en.name)} のカウンター</a></div>` : '');
+}
+
+/* ---------- 記録タブ ---------- */
+function renderLog() {
+  const n = records.length, w = records.filter(r => r.win).length;
+  $('#log-stats').innerHTML = `<div class="stats">
+    <div class="stat"><b>${n}</b><span>試合</span></div>
+    <div class="stat"><b>${w}-${n - w}</b><span>勝-敗</span></div>
+    <div class="stat"><b>${n ? Math.round(w / n * 100) + '%' : '―'}</b><span>勝率</span></div></div>`;
+
+  const by = {};
+  for (const r of records) { const o = by[r.vs] = by[r.vs] || { n: 0, w: 0 }; o.n++; if (r.win) o.w++; }
+  const hard = Object.entries(by).filter(([id, o]) => CHM[id] && o.n >= 2 && o.w / o.n < 0.5)
+    .sort((a, b) => a[1].w / a[1].n - b[1].w / b[1].n || b[1].n - a[1].n).slice(0, 10);
+  $('#log-hard').innerHTML = hard.length ? '<div class="list">' + hard.map(([id, o]) => `
+    <div class="lrow"><img src="${champImg(CHM[id])}" alt=""><div class="main"><b>${esc(CHM[id].name)}</b><div class="tags">${champTags(CHM[id], false)}</div></div>
+      <div class="side"><span class="big wr-bad">${Math.round(o.w / o.n * 100)}%</span>${o.w}勝${o.n - o.w}敗
+      <div style="margin-top:4px"><button class="btn tiny" data-pickvs="${id}">ピック相談へ</button></div></div></div>`).join('') + '</div>'
+    : '<div class="empty">まだありません</div>';
+
+  const list = records.slice().sort((a, b) => b.t - a.t);
+  $('#log-list').innerHTML = list.length ? '<div class="list">' + list.map(r => {
+    const a = CHM[r.me], b = CHM[r.vs];
+    const d = new Date(r.t);
+    return `<div class="lrow">
+      ${a ? `<img src="${champImg(a)}" alt="">` : ''}
+      <div class="main"><b>${esc(a ? a.name : r.me)} <span class="muted small">vs</span> ${esc(b ? b.name : r.vs)}</b>
+        <div class="small muted">${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}${r.lane && laneOf(r.lane) ? '・' + laneOf(r.lane).ja : ''}${r.note ? '・' + esc(r.note) : ''}</div></div>
+      <div class="side"><span class="res ${r.win ? 'w' : 'l'}">${r.win ? '勝ち' : '負け'}</span>
+        <div style="margin-top:4px"><button class="btn tiny" data-del="${r.t}" aria-label="削除">削除</button></div></div>
+    </div>`;
+  }).join('') + '</div>' : '<div class="empty">「対面・ビルド」タブで試合結果を記録すると、ここに表示されます。</div>';
+}
+
+/* ---------- チャンピオン選択 ---------- */
+let pickTarget = null;
+function openPicker(target) {
+  pickTarget = target;
+  const titles = { me:'自分のチャンピオン', enemy:'対面のチャンピオン', team:'敵チャンピオンを追加', pickEnemy:'相手のチャンピオン', pool:'マイプールを編集（タップで追加・解除）' };
+  $('#pk-title').textContent = titles[target];
+  $('#pk-q').value = '';
+  renderPicker();
+  $('#picker').showModal();
+  if (matchMedia('(pointer: fine)').matches) $('#pk-q').focus();
+}
+function renderPicker() {
+  const q = norm($('#pk-q').value);
+  const list = q ? CH.filter(c => c.q.includes(q)) : CH;
+  const isOn = id => pickTarget === 'pool' ? pool.includes(id) : false;
+  const btn = c => `<button data-pick="${c.id}" class="${isOn(c.id) ? 'on' : ''}"><img src="${champImg(c)}" alt="" loading="lazy"><span>${esc(c.name)}</span></button>`;
+  let h = '';
+  if (!q && pickTarget !== 'pool') {
+    const fav = (pickTarget === 'me' ? pool : []).map(id => CHM[id]).filter(Boolean);
+    if (fav.length) h += `<h4>マイプール</h4><div class="grid">${fav.map(btn).join('')}</div>`;
+    const rc = recent.map(id => CHM[id]).filter(c => c && !fav.includes(c)).slice(0, 12);
+    if (rc.length) h += `<h4>最近選んだチャンピオン</h4><div class="grid">${rc.map(btn).join('')}</div>`;
+    h += '<h4>すべて</h4>';
+  }
+  h += list.length ? `<div class="grid">${list.map(btn).join('')}</div>` : '<div class="empty">見つかりません</div>';
+  $('#pk-body').innerHTML = h;
+}
+function choose(id) {
+  if (pickTarget === 'pool') {
+    pool = pool.includes(id) ? pool.filter(x => x !== id) : [...pool, id];
+    store.set('pool', pool);
+    renderPicker(); renderPick();
+    return;
+  }
+  recent = [id, ...recent.filter(x => x !== id)].slice(0, 20); store.set('recent', recent);
+  if (pickTarget === 'me') { state.me = id; state.role = ''; }
+  else if (pickTarget === 'enemy') { state.enemy = id; state.team = state.team.filter(x => x !== id); }
+  else if (pickTarget === 'team') { if (id !== state.enemy && !state.team.includes(id)) state.team.push(id); }
+  else if (pickTarget === 'pickEnemy') state.pickEnemy = id;
+  save();
+  $('#picker').close();
+  render();
+}
+
+/* ---------- タブ切り替えと全体描画 ---------- */
+function render() {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === state.tab));
+  for (const t of ['match', 'pick', 'log']) $('#tab-' + t).hidden = state.tab !== t;
+  if (state.tab === 'match') renderMatch();
+  if (state.tab === 'pick') renderPick();
+  if (state.tab === 'log') renderLog();
+}
+
+function bind() {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => { state.tab = b.dataset.tab; save(); render(); scrollTo(0, 0); }));
+  $('#slot-me').addEventListener('click', () => openPicker('me'));
+  $('#slot-enemy').addEventListener('click', () => openPicker('enemy'));
+  $('#pick-enemy').addEventListener('click', () => openPicker('pickEnemy'));
+  $('#pool-edit').addEventListener('click', () => openPicker('pool'));
+  $('#lanes').addEventListener('click', e => { const b = e.target.closest('[data-lane]'); if (!b) return; state.lane = state.lane === b.dataset.lane ? '' : b.dataset.lane; save(); renderMatch(); });
+  $('#roles').addEventListener('click', e => {
+    const b = e.target.closest('[data-role]'); if (!b) return;
+    const auto = state.me ? CHM[state.me].role : '';
+    state.role = b.dataset.role === auto ? '' : b.dataset.role; save(); renderMatch();
+  });
+  $('#team').addEventListener('click', e => {
+    if (e.target.closest('#team-add')) return openPicker('team');
+    const rm = e.target.closest('[data-rm]');
+    if (rm) { state.team.splice(+rm.dataset.rm, 1); save(); renderMatch(); }
+  });
+  $('#pick-out').addEventListener('click', e => {
+    const d = e.target.closest('[data-detail]'), u = e.target.closest('[data-unpool]');
+    if (d) { state.me = d.dataset.detail; state.enemy = state.pickEnemy; state.role = ''; state.team = state.team.filter(x => x !== state.enemy); state.tab = 'match'; save(); render(); scrollTo(0, 0); }
+    if (u) { pool = pool.filter(x => x !== u.dataset.unpool); store.set('pool', pool); renderPick(); }
+  });
+  $('#tab-log').addEventListener('click', e => {
+    const del = e.target.closest('[data-del]'), pv = e.target.closest('[data-pickvs]');
+    if (del && confirm('この記録を削除しますか？')) { records = records.filter(r => String(r.t) !== del.dataset.del); store.set('records', records); renderLog(); }
+    if (pv) { state.pickEnemy = pv.dataset.pickvs; state.tab = 'pick'; save(); render(); scrollTo(0, 0); }
+  });
+  $('#pk-q').addEventListener('input', renderPicker);
+  $('#pk-close').addEventListener('click', () => $('#picker').close());
+  $('#picker').addEventListener('click', e => { if (e.target === $('#picker')) $('#picker').close(); });
+  $('#picker').addEventListener('close', () => { if (pickTarget === 'pool') renderPick(); });
+  $('#pk-body').addEventListener('click', e => { const b = e.target.closest('[data-pick]'); if (b) choose(b.dataset.pick); });
+
+  $('#export').addEventListener('click', () => {
+    const data = JSON.stringify({ app: 'lol-matchup', v: 1, records, notes, pool }, null, 1);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = `lol-matchup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('#import').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (d.app !== 'lol-matchup') throw new Error('format');
+      const seen = new Set(records.map(r => r.t + r.me + r.vs));
+      const add = (d.records || []).filter(r => r && r.t && r.me && r.vs && !seen.has(r.t + r.me + r.vs));
+      records = records.concat(add); store.set('records', records);
+      notes = Object.assign({}, d.notes || {}, notes); store.set('notes', notes);
+      pool = [...new Set([...pool, ...(d.pool || [])])].filter(id => CHM[id]); store.set('pool', pool);
+      toast(`${add.length}件の記録を読み込みました`); render();
+    } catch (err) { toast('読み込めませんでした（このアプリで書き出したファイルを選んでください）'); }
+  });
+}
+
+(async () => {
+  try {
+    await load();
+  } catch (e) {
+    $('#loading').innerHTML = 'データを読み込めませんでした。通信状態を確認して再読み込みしてください。<br><button class="btn" onclick="location.reload()" style="margin-top:10px">再読み込み</button>';
+    return;
+  }
+  $('#loading').hidden = true;
+  $('#patch').textContent = `パッチ ${V}`;
+  bind();
+  render();
+})();
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
