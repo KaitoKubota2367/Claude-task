@@ -69,6 +69,13 @@
     color: var(--text); cursor: pointer; text-align: center;
   }
   .slot.filled { border-style: solid; }
+  .slotwrap { position: relative; display: flex; min-width: 0; }
+  .slotwrap .slot { flex: 1; min-width: 0; }
+  .clr {
+    position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; padding: 0; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: .8rem; cursor: pointer;
+  }
+  .clr:hover, .clr:focus-visible { color: var(--lose); border-color: var(--lose); outline: none; }
   .slot .lbl { font-size: .74rem; color: var(--muted); }
   .slot img { width: 64px; height: 64px; border-radius: 12px; }
   .slot .nm { font-weight: 700; font-size: .95rem; line-height: 1.3; }
@@ -242,9 +249,9 @@
   <section id="tab-match" hidden>
     <div class="panel">
       <div class="versus">
-        <button class="slot" id="slot-me"></button>
+        <div class="slotwrap"><button class="slot" id="slot-me"></button><button class="clr" data-clear="me" aria-label="自分のチャンピオンを外す" hidden>✕</button></div>
         <div class="vs">VS</div>
-        <button class="slot" id="slot-enemy"></button>
+        <div class="slotwrap"><button class="slot" id="slot-enemy"></button><button class="clr" data-clear="enemy" aria-label="対面のチャンピオンを外す" hidden>✕</button></div>
       </div>
       <div class="opt">
         <div>
@@ -269,7 +276,7 @@
     <div class="panel">
       <h2>相手のチャンピオン <span class="hint">ピック画面で見えている対面を選択</span></h2>
       <div class="row">
-        <button class="slot" id="pick-enemy" style="min-height:96px;flex:0 0 120px"></button>
+        <div class="slotwrap" style="flex:0 0 120px"><button class="slot" id="pick-enemy" style="min-height:96px"></button><button class="clr" data-clear="pickEnemy" aria-label="相手のチャンピオンを外す" hidden>✕</button></div>
         <div class="muted small" style="flex:1;min-width:180px">
           「マイプール」（よく使うチャンピオン）の中から、この相手に対する<b>自分の過去の勝率</b>と<b>タイプ相性</b>で並べます。記録が増えるほど正確になります。
         </div>
@@ -658,6 +665,8 @@ function renderMatchInputs() {
   $('#slot-me').classList.toggle('filled', !!state.me);
   $('#slot-enemy').innerHTML = slotHTML(state.enemy, '対面');
   $('#slot-enemy').classList.toggle('filled', !!state.enemy);
+  $('[data-clear="me"]').hidden = !state.me;
+  $('[data-clear="enemy"]').hidden = !state.enemy;
   $('#lanes').innerHTML = LANES.map(l => `<button class="chip" data-lane="${l.k}" aria-pressed="${state.lane === l.k}">${l.ja}</button>`).join('');
   const auto = state.me ? CHM[state.me].role : '';
   $('#roles').innerHTML = Object.keys(ROLE_JA).map(r =>
@@ -907,6 +916,7 @@ function renderPick() {
   const en = CHM[state.pickEnemy];
   $('#pick-enemy').innerHTML = slotHTML(state.pickEnemy, '相手');
   $('#pick-enemy').classList.toggle('filled', !!en);
+  $('[data-clear="pickEnemy"]').hidden = !en;
   $('#pool-count').textContent = pool.length ? `${pool.length}体` : '';
   const out = $('#pick-out');
   if (!pool.length) {
@@ -1046,6 +1056,12 @@ function bind() {
     const rm = e.target.closest('[data-rm]');
     if (rm) { state.team.splice(+rm.dataset.rm, 1); save(); renderMatch(); }
   });
+  document.querySelectorAll('[data-clear]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.clear;
+    state[k] = null;
+    if (k === 'me') state.role = '';
+    save(); render();
+  }));
   $('#match-out').addEventListener('click', e => {
     const b = e.target.closest('[data-pos]');
     if (b) { state.lane = LANE_OF_POS[b.dataset.pos] || ''; save(); renderMatch(); }
