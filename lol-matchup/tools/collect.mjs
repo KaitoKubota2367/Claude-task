@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const KEY = process.env.RIOT_API_KEY;
+const KEY = (process.env.RIOT_API_KEY || '').trim();
 const DATA = process.env.DATA_DIR || 'data';
 const RUN_MS = (Number(process.env.RUN_MINUTES) || 50) * 60000;
 const PLATFORMS = (process.env.PLATFORMS || 'jp1,kr').split(',').map(s => s.trim()).filter(Boolean);
@@ -78,7 +78,13 @@ async function api(region, pathname, tries = 0) {
     if (tries < 3) { await sleep(3000); return api(region, pathname, tries + 1); }
     return null;
   }
-  if (res.status === 401 || res.status === 403) throw new AuthError(String(res.status));
+  if (res.status === 401 || res.status === 403) {
+    let body = '';
+    try { body = (await res.text()).slice(0, 200); } catch {}
+    const err = new AuthError(`${res.status} ${region} ${pathname.split('?')[0]} ${body}`);
+    err.status = res.status;
+    throw err;
+  }
   if (res.status === 429) {
     const ra = Number(res.headers.get('retry-after')) || 10;
     log('429 待機', region, ra + 's');
@@ -327,9 +333,23 @@ async function main() {
     status.totalMatches = acc.matches;
     status.message = 'OK';
   } catch (e) {
-    status.message = e instanceof AuthError
-      ? 'APIキーが無効か期限切れです（開発用キーは24時間で切れます）。GitHub の Secrets の RIOT_API_KEY を新しいキーに更新してください。'
-      : 'エラー: ' + (e && e.message || e);
+    if (e instanceof AuthError) {
+      status.detail = e.message;
+      // キー自体が使えるのか、特定のAPIだけ拒否されたのかを切り分ける
+      let keyWorks = null;
+      if (KEY) {
+        try {
+          const r = await fetch(`https://${PLATFORMS[0]}.api.riotgames.com/lol/status/v4/platform-data`, { headers: { 'X-Riot-Token': KEY } });
+          keyWorks = r.ok; status.probe = r.status;
+        } catch {}
+      }
+      status.keyInfo = { length: KEY.length, prefixOk: KEY.startsWith('RGAPI-') };
+      status.message = !KEY ? 'Secrets に RIOT_API_KEY が登録されていません。'
+        : keyWorks ? 'キーは有効ですが、一部のAPIが拒否されました（detail を確認）。'
+        : 'APIキーが無効か期限切れです（開発用キーは24時間で切れます）。GitHub の Secrets の RIOT_API_KEY を新しいキーに更新してください。';
+    } else {
+      status.message = 'エラー: ' + (e && e.message || e);
+    }
     log(status.message);
   }
   status.calls = calls;
