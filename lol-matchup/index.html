@@ -165,6 +165,9 @@
   .pk-head { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); display: grid; gap: 8px; }
   .pk-head .row { justify-content: space-between; flex-wrap: nowrap; }
   .pk-head b { font-size: 1rem; }
+  .pk-head .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; }
+  .pk-head .chips::-webkit-scrollbar { display: none; }
+  .pk-head .chip { white-space: nowrap; flex: none; }
   .pk-body { overflow-y: auto; padding: 10px 14px 18px; flex: 1; }
   .pk-body h4 { margin: 6px 0; font-size: .78rem; color: var(--muted); font-weight: 600; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-bottom: 12px; }
@@ -289,6 +292,8 @@
         <button class="btn tiny" id="pk-close">閉じる</button>
       </div>
       <input type="search" id="pk-q" placeholder="名前で検索（ひらがな・カタカナ・英語）" autocomplete="off">
+      <div class="chips" id="pk-lane"></div>
+      <div class="chips" id="pk-class"></div>
     </div>
     <div class="pk-body" id="pk-body"></div>
   </div>
@@ -324,6 +329,20 @@ const TRAIT_LIST = {
   b: 'Annie Veigar Syndra Lux Brand Vex Malphite Ahri Diana Leblanc Pyke Rengar Khazix Zed Talon Kayn Evelynn Fizz Kassadin Katarina Akali Qiyana Naafiri Nocturne Shaco Elise Nidalee Ekko Sylas Aurora',
   i: 'Evelynn Twitch Shaco Akali Rengar Khazix Vayne MonkeyKing Talon Pyke Teemo Senna Qiyana',
 };
+// 主に使われるレーン（複数可）。書かれていないチャンピオンはタグから推定する。
+const LANE_LIST = {
+  top: 'Aatrox Ambessa Camille Chogath Darius DrMundo Fiora Gangplank Garen Gnar Gragas Gwen Illaoi Irelia Jax Jayce Kayle Kennen Kled KSante Malphite Mordekaiser Nasus Olaf Ornn Pantheon Poppy Quinn Renekton Rengar Riven Rumble Sett Shen Singed Sion Skarner TahmKench Teemo Trundle Tryndamere Udyr Urgot Vayne Volibear Warwick Yasuo Yone Yorick Zac Akali Aurora Cassiopeia Heimerdinger Ryze Vladimir Sylas MonkeyKing Zaahen',
+  jungle: 'Amumu Belveth Brand Briar Diana Ekko Elise Evelynn Fiddlesticks Gragas Graves Hecarim Ivern JarvanIV Jax Karthus Kayn Khazix Kindred LeeSin Lillia Maokai MasterYi Nidalee Nocturne Nunu Pantheon Poppy Qiyana RekSai Rammus Rengar Sejuani Shaco Shyvana Skarner Sylas Taliyah Talon Trundle Udyr Vi Viego Volibear Warwick MonkeyKing XinZhao Zac Zed Zyra Naafiri',
+  mid: 'Ahri Akali Akshan Anivia Annie AurelionSol Aurora Azir Brand Cassiopeia Corki Diana Ekko Fizz Galio Gragas Heimerdinger Hwei Irelia Jayce Kassadin Katarina Kayle Leblanc Lissandra Lucian Lux Malphite Malzahar Mel Naafiri Neeko Orianna Pantheon Qiyana Ryze Seraphine Smolder Swain Sylas Syndra Taliyah Talon Tristana TwistedFate Veigar Velkoz Vex Viktor Vladimir Xerath Yasuo Yone Zed Ziggs Zoe',
+  bot: 'Aphelios Ashe Caitlyn Corki Draven Ezreal Jhin Jinx Kaisa Kalista KogMaw Lucian MissFortune Nilah Samira Senna Seraphine Sivir Smolder Swain Tristana Twitch Varus Vayne Xayah Yasuo Yunara Zeri Ziggs',
+  sup: 'Alistar Amumu Ashe Bard Blitzcrank Brand Braum Heimerdinger Hwei Janna Karma Leona Lulu Lux Maokai Mel Milio Morgana Nami Nautilus Neeko Pantheon Poppy Pyke Rakan Rell Renata Senna Seraphine Shaco Sona Soraka Swain TahmKench Taric Thresh Velkoz Xerath Yuumi Zilean Zyra',
+};
+const LANES_OF = {};
+for (const [l, s] of Object.entries(LANE_LIST)) for (const id of s.split(' ')) (LANES_OF[id] = LANES_OF[id] || new Set()).add(l);
+function guessLanes(tags) {
+  const m = { Marksman:'bot', Support:'sup', Mage:'mid', Assassin:'mid', Fighter:'top', Tank:'top' };
+  return new Set(tags.map(t => m[t]).filter(Boolean));
+}
 const TRAITS = {};
 for (const [t, s] of Object.entries(TRAIT_LIST)) for (const id of s.split(' ')) (TRAITS[id] = TRAITS[id] || new Set()).add(t);
 const TRAIT_JA = { h:'回復が多い', s:'シールド', c:'CCが多い', p:'ポーク', b:'バースト', i:'ステルス' };
@@ -404,6 +423,7 @@ async function load() {
       id: x.id, name: x.name, title: x.title, tags: x.tags, image: x.image, dmg, tr,
       ranged: x.stats.attackrange >= 325,
       tank: x.tags[0] === 'Tank' || x.info.defense >= 8,
+      lanes: LANES_OF[x.id] || guessLanes(x.tags),
       q: norm(x.name) + ' ' + norm(x.id) + ' ' + norm(x.title),
     };
     ch.role = autoRole(ch);
@@ -762,9 +782,12 @@ function renderLog() {
 }
 
 /* ---------- チャンピオン選択 ---------- */
-let pickTarget = null;
+let pickTarget = null, pkLane = '', pkClass = '';
 function openPicker(target) {
   pickTarget = target;
+  // 対面・ビルドタブでレーンを選んでいれば、そのレーンで最初から絞り込む
+  pkLane = ['me', 'enemy', 'pickEnemy'].includes(target) ? state.lane : '';
+  pkClass = '';
   const titles = { me:'自分のチャンピオン', enemy:'対面のチャンピオン', team:'敵チャンピオンを追加', pickEnemy:'相手のチャンピオン', pool:'マイプールを編集（タップで追加・解除）' };
   $('#pk-title').textContent = titles[target];
   $('#pk-q').value = '';
@@ -774,16 +797,22 @@ function openPicker(target) {
 }
 function renderPicker() {
   const q = norm($('#pk-q').value);
-  const list = q ? CH.filter(c => c.q.includes(q)) : CH;
+  $('#pk-lane').innerHTML = `<button class="chip" data-pklane="" aria-pressed="${!pkLane}">全レーン</button>`
+    + LANES.map(l => `<button class="chip" data-pklane="${l.k}" aria-pressed="${pkLane === l.k}">${l.ja}</button>`).join('');
+  $('#pk-class').innerHTML = `<button class="chip" data-pkclass="" aria-pressed="${!pkClass}">全クラス</button>`
+    + Object.entries(TAG_JA).map(([k, ja]) => `<button class="chip" data-pkclass="${k}" aria-pressed="${pkClass === k}">${ja}</button>`).join('');
+  const ok = c => (!q || c.q.includes(q)) && (!pkLane || c.lanes.has(pkLane)) && (!pkClass || c.tags.includes(pkClass));
+  const filtered = !!(q || pkLane || pkClass);
+  const list = CH.filter(ok);
   const isOn = id => pickTarget === 'pool' ? pool.includes(id) : false;
   const btn = c => `<button data-pick="${c.id}" class="${isOn(c.id) ? 'on' : ''}"><img src="${champImg(c)}" alt="" loading="lazy"><span>${esc(c.name)}</span></button>`;
   let h = '';
   if (!q && pickTarget !== 'pool') {
-    const fav = (pickTarget === 'me' ? pool : []).map(id => CHM[id]).filter(Boolean);
+    const fav = (pickTarget === 'me' ? pool : []).map(id => CHM[id]).filter(c => c && ok(c));
     if (fav.length) h += `<h4>マイプール</h4><div class="grid">${fav.map(btn).join('')}</div>`;
-    const rc = recent.map(id => CHM[id]).filter(c => c && !fav.includes(c)).slice(0, 12);
+    const rc = recent.map(id => CHM[id]).filter(c => c && ok(c) && !fav.includes(c)).slice(0, 12);
     if (rc.length) h += `<h4>最近選んだチャンピオン</h4><div class="grid">${rc.map(btn).join('')}</div>`;
-    h += '<h4>すべて</h4>';
+    h += `<h4>${filtered ? `絞り込み結果（${list.length}体）` : 'すべて'}</h4>`;
   }
   h += list.length ? `<div class="grid">${list.map(btn).join('')}</div>` : '<div class="empty">見つかりません</div>';
   $('#pk-body').innerHTML = h;
@@ -842,6 +871,8 @@ function bind() {
     if (pv) { state.pickEnemy = pv.dataset.pickvs; state.tab = 'pick'; save(); render(); scrollTo(0, 0); }
   });
   $('#pk-q').addEventListener('input', renderPicker);
+  $('#pk-lane').addEventListener('click', e => { const b = e.target.closest('[data-pklane]'); if (b) { pkLane = b.dataset.pklane; renderPicker(); } });
+  $('#pk-class').addEventListener('click', e => { const b = e.target.closest('[data-pkclass]'); if (b) { pkClass = b.dataset.pkclass; renderPicker(); } });
   $('#pk-close').addEventListener('click', () => $('#picker').close());
   $('#picker').addEventListener('click', e => { if (e.target === $('#picker')) $('#picker').close(); });
   $('#picker').addEventListener('close', () => { if (pickTarget === 'pool') renderPick(); });
