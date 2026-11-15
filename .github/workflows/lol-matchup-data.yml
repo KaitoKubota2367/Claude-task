@@ -1,0 +1,63 @@
+# LoL 相性ナビ：Riot API から試合データを集めてビルドを集計し、lol-data ブランチに保存する。
+# 1時間ごとに自動実行。Actions タブの「Run workflow」から手動でも実行できる。
+# APIキーはリポジトリの Secrets（RIOT_API_KEY）に保存しておく。
+name: lol-matchup data
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: '集める時間（分）'
+        default: '50'
+
+concurrency:
+  group: lol-matchup-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Get data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git ls-remote --exit-code --heads origin lol-data >/dev/null; then
+            git clone --depth 1 --branch lol-data "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
+          else
+            mkdir -p data
+          fi
+
+      - name: Collect matches
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+          RUN_MINUTES: ${{ github.event.inputs.minutes || '50' }}
+          DATA_DIR: data
+        run: node lol-matchup/tools/collect.mjs
+
+      - name: Publish data branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd data
+          [ -n "$(ls -A | grep -v '^.git$')" ] || exit 0
+          rm -rf .git
+          git init -q -b lol-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "data update $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" lol-data
