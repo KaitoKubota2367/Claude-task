@@ -1,0 +1,1 @@
+{"ok":false,"at":"2026-11-21T15:21:16.632Z","newMatches":0,"calls":1,"message":"APIキーが無効か期限切れです（開発用キーは24時間で切れます）。GitHub の Secrets の RIOT_API_KEY を新しいキーに更新してください。","detail":"401 jp1 /lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5 {\"status\":{\"message\":\"Unknown apikey\",\"status_code\":401}}","probe":401,"keyInfo":{"length":42,"prefixOk":true},"minutes":0}
